@@ -40,6 +40,7 @@ ENV/
 data/raw/*.json
 data/processed/*.json
 data/rag_store/*.json
+data/processed/lightrag_korean_test/
 *.pkl
 *.h5
 *.hdf5
