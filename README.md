@@ -1,77 +1,95 @@
 # INU LLM RAG Matching Engine
 
-교내 구성원을 위한 산학 매칭 알고리즘 프로젝트
+Industry-Academia Matching Algorithm Project for University Members
 
-## 프로젝트 개요
+## Project Overview
 
-이 프로젝트는 교내 구성원(교수, 연구원 등)의 산학 지식 정보를 수집하는 시스템입니다.
-KIPRIS API를 통해 특허 데이터를 수집하고, 교수 정보와 함께 저장합니다.
+This project collects industry-academia knowledge information for university members (professors, researchers, etc.).
+It collects patent data through the KIPRIS API and stores it along with professor information.
 
-## 주요 기능
+## Features
 
-1. **KIPRIS 특허 데이터 수집**
-   - MariaDB의 `tb_inu_tech` 테이블에서 특허 출원번호 조회
-   - `v_emp1` 테이블과 조인하여 교수 정보 매칭
-   - KIPRIS API를 통해 특허 상세 정보 수집
-   - JSON 파일로 저장
+1. **KIPRIS Patent Data Collection**
+   - Query patent application numbers from MariaDB `tb_inu_tech` table
+   - Match professor information by joining with `v_emp1` table
+   - Collect detailed patent information through KIPRIS API
+   - Save to JSON file
 
-## 프로젝트 구조
+## Project Structure
 
 ```
 inu-llm-rag-matching-engine/
-├── data/                    # 데이터 저장 디렉토리
-│   ├── raw/                 # 원본 데이터
-│   │   ├── kipris_data.json              # KIPRIS 특허 데이터
-│   │   └── kipris_professor_info.json    # 교수 정보
-│   ├── processed/           # 처리된 데이터
-│   └── datasets/            # 데이터셋
-├── data_collection/         # 데이터 수집 모듈
+├── data/                    # Data storage directory
+│   └── patent/              # Patent data
+│       └── kipris_data.json # Collected patent data with professor info
+├── data_collection/         # Data collection module
 │   ├── __init__.py
-│   └── kipris_collector.py  # KIPRIS 특허 데이터 수집기
-├── config/                  # 설정 파일
-│   ├── database.py          # 데이터베이스 연결 설정
-│   └── settings.py          # 프로젝트 설정 (API 키 등)
+│   └── kipris_collector.py  # KIPRIS patent data collector
+├── config/                  # Configuration files
+│   ├── __init__.py
+│   ├── database.py          # Database connection settings (gitignored)
+│   └── settings.py          # Project settings - API keys (gitignored)
 ├── .gitignore
 ├── requirements.txt
 └── README.md
 ```
 
-## 사용 방법
+## Usage
 
-### KIPRIS 특허 데이터 수집
+### KIPRIS Patent Data Collection
 
 ```python
 from data_collection.kipris_collector import KIPRISCollector
 from config.settings import KIPRIS_API_KEY
 
-# 수집기 생성
+# Create collector
 collector = KIPRISCollector(api_key=KIPRIS_API_KEY)
 
-# JSON 파일로 저장 (limit=None이면 전체 수집, 호출 제한까지)
+# Collect and save to JSON file
+# limit=None: collect all (until API rate limit)
 collector.collect_and_save(limit=None)
 ```
 
-## 수집되는 데이터
+## Collected Data Structure
 
-### 특허 데이터 (`kipris_data.json`)
-- `tech_aplct_id`: 특허 출원번호
-- `inpt_mbr_id`: 교수 사번
-- `kipris_index_no`: 인덱스 번호
-- `kipris_register_status`: 등록 상태
-- `kipris_application_date`: 출원일
-- `kipris_abstract`: 특허 요약
-- `kipris_application_name`: 발명의 명칭
-- `professor_info`: 교수 정보 (v_emp1 테이블에서 가져온 모든 정보)
+### Patent Data (`data/patent/kipris_data.json`)
 
-### 교수 정보 (`kipris_professor_info.json`)
-- `professor_info`: 교수 정보 (중복 제거)
-- `collected_from_kipris`: KIPRIS에서 수집됨 표시
+Each record contains:
+- `tech_aplct_id`: Patent application number
+- `inpt_mbr_id`: Professor employee ID
+- `kipris_index_no`: KIPRIS index number
+- `kipris_register_status`: Registration status
+- `kipris_application_date`: Application date
+- `kipris_abstract`: Patent abstract
+- `kipris_application_name`: Invention title
+- `professor_info`: Professor information (all fields from `v_emp1` table)
+  - `EMP_NO`: Employee number
+  - `NM`: Name
+  - `HG_NM`: Department name
+  - And other fields from `v_emp1` table
 
-## 개발 환경
+## Setup
+
+1. Create virtual environment:
+```bash
+python -m venv venv
+venv\Scripts\activate  # Windows
+```
+
+2. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+3. Configure settings:
+   - Copy `config/database.py.example` to `config/database.py` and set database credentials
+   - Copy `config/settings.py.example` to `config/settings.py` and set KIPRIS API key
+
+## Development Environment
 
 - Python 3.11
-- 필요한 패키지는 `requirements.txt` 참조
+- See `requirements.txt` for required packages
 
-## 라이선스
+## License
 
-이 프로젝트는 교내 연구 목적으로 사용됩니다.
+This project is for internal research purposes.
