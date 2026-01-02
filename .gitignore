@@ -34,9 +34,7 @@ ENV/
 *~
 
 # Data (큰 파일들)
-data/raw/*.json
-data/processed/*.json
-data/rag_store/*.json
+data/
 *.pkl
 *.h5
 *.hdf5
