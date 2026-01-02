@@ -62,6 +62,10 @@ logs/
 .env
 .env.local
 
+# Config files (민감한 정보 포함)
+config/database.py
+config/settings.py
+
 # Jupyter Notebook
 .ipynb_checkpoints
 
