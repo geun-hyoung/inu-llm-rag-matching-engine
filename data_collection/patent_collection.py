@@ -16,8 +16,8 @@ import sys
 
 # 상위 디렉토리를 경로에 추가
 sys.path.append(str(Path(__file__).parent.parent))
-from config.database import get_db_connection, close_db_connection, TARGET_TABLE, TARGET_ID_COLUMN
-from config.settings import KIPRIS_API_KEY
+from config.database import get_db_connection, close_db_connection, get_patent_statistics, get_patent_application_ids, TARGET_TABLE, TARGET_ID_COLUMN
+from config.settings import KIPRIS_API_KEY, PATENT_DATA_FILE
 
 
 class KIPRISCollector:
@@ -42,37 +42,7 @@ class KIPRISCollector:
         Returns:
             통계 정보 딕셔너리
         """
-        stats = {}
-        
-        # 1. 특허 테이블 전체 데이터 개수
-        query_total = f"SELECT COUNT(*) as total_count FROM {TARGET_TABLE}"
-        df_total = pd.read_sql(query_total, conn)
-        stats['total_records'] = int(df_total.iloc[0]['total_count'])
-        
-        # 2. 출원 아이디(tech_aplct_id)가 있는 데이터 개수
-        query_with_id = f"""
-            SELECT COUNT(*) as count_with_id
-            FROM {TARGET_TABLE}
-            WHERE {TARGET_ID_COLUMN} IS NOT NULL 
-                AND {TARGET_ID_COLUMN} != ''
-        """
-        df_with_id = pd.read_sql(query_with_id, conn)
-        stats['records_with_application_id'] = int(df_with_id.iloc[0]['count_with_id'])
-        
-        # 3. 교수 사번 매칭된 데이터 개수
-        query_matched = f"""
-            SELECT COUNT(DISTINCT t.{TARGET_ID_COLUMN}) as matched_count
-            FROM {TARGET_TABLE} t
-            INNER JOIN v_emp1 e ON CAST(t.inpt_mbr_id AS CHAR) = CAST(e.EMP_NO AS CHAR)
-            WHERE t.{TARGET_ID_COLUMN} IS NOT NULL 
-                AND t.{TARGET_ID_COLUMN} != ''
-                AND t.inpt_mbr_id IS NOT NULL
-                AND t.inpt_mbr_id != ''
-        """
-        df_matched = pd.read_sql(query_matched, conn)
-        stats['records_matched_with_professor'] = int(df_matched.iloc[0]['matched_count'])
-        
-        return stats
+        return get_patent_statistics(conn)
     
     def print_statistics(self, stats: Dict[str, int], collected_count: int = 0):
         """
@@ -95,77 +65,18 @@ class KIPRISCollector:
     def get_application_ids(self, conn: mariadb.Connection, limit: Optional[int] = None) -> List[Dict]:
         """
         데이터베이스에서 특허 출원번호와 교수 정보를 가져옵니다.
-        (tech_aplct_id가 있고, v_emp1 테이블의 EMP_NO와 매칭되는 것만)
+        (tech_aplct_id가 있고, v_emp1 테이블의 SQ와 매칭되는 것만)
         
         Args:
             conn: 데이터베이스 연결 객체
             limit: 가져올 최대 개수 (None이면 전체)
             
         Returns:
-            [{"tech_aplct_id": "...", "inpt_mbr_id": "...", "professor_info": {...}}, ...] 형태의 리스트
+            [{"tech_aplct_id": "...", "mbr_sn": "...", "professor_info": {...}}, ...] 형태의 리스트
         """
-        # v_emp1과 조인하여 EMP_NO가 매칭되는 것만 가져오기
-        # Collation 문제 해결을 위해 CAST 사용
-        query = f"""
-            SELECT DISTINCT 
-                t.{TARGET_ID_COLUMN}, 
-                t.inpt_mbr_id,
-                e.EMP_NO,
-                e.NM,
-                e.GEN_GBN,
-                e.BIRTH_DT,
-                e.NAT_GBN,
-                e.RECHER_REG_NO,
-                e.WKGD_NM,
-                e.COLG_NM,
-                e.HG_NM,
-                e.HOOF_GBN,
-                e.HANDP_NO,
-                e.OFCE_TELNO,
-                e.EMAIL
-            FROM {TARGET_TABLE} t
-            INNER JOIN v_emp1 e ON CAST(t.inpt_mbr_id AS CHAR) = CAST(e.EMP_NO AS CHAR)
-            WHERE t.{TARGET_ID_COLUMN} IS NOT NULL 
-                AND t.{TARGET_ID_COLUMN} != ''
-                AND t.inpt_mbr_id IS NOT NULL
-                AND t.inpt_mbr_id != ''
-        """
-        if limit:
-            query += f" LIMIT {limit}"
-        query += ";"
-        
-        df = pd.read_sql(query, conn)
-        
-        # 딕셔너리 리스트로 변환
-        application_list = []
-        for _, row in df.iterrows():
-            if pd.notna(row[TARGET_ID_COLUMN]):
-                # 교수 정보 추출
-                professor_info = {
-                    "EMP_NO": str(row["EMP_NO"]) if pd.notna(row["EMP_NO"]) else "",
-                    "NM": str(row["NM"]) if pd.notna(row["NM"]) else "",
-                    "GEN_GBN": str(row["GEN_GBN"]) if pd.notna(row["GEN_GBN"]) else "",
-                    "BIRTH_DT": str(row["BIRTH_DT"]) if pd.notna(row["BIRTH_DT"]) else "",
-                    "NAT_GBN": str(row["NAT_GBN"]) if pd.notna(row["NAT_GBN"]) else "",
-                    "RECHER_REG_NO": str(row["RECHER_REG_NO"]) if pd.notna(row["RECHER_REG_NO"]) else "",
-                    "WKGD_NM": str(row["WKGD_NM"]) if pd.notna(row["WKGD_NM"]) else "",
-                    "COLG_NM": str(row["COLG_NM"]) if pd.notna(row["COLG_NM"]) else "",
-                    "HG_NM": str(row["HG_NM"]) if pd.notna(row["HG_NM"]) else "",
-                    "HOOF_GBN": str(row["HOOF_GBN"]) if pd.notna(row["HOOF_GBN"]) else "",
-                    "HANDP_NO": str(row["HANDP_NO"]) if pd.notna(row["HANDP_NO"]) else "",
-                    "OFCE_TELNO": str(row["OFCE_TELNO"]) if pd.notna(row["OFCE_TELNO"]) else "",
-                    "EMAIL": str(row["EMAIL"]) if pd.notna(row["EMAIL"]) else "",
-                }
-                
-                application_list.append({
-                    "tech_aplct_id": str(row[TARGET_ID_COLUMN]),
-                    "inpt_mbr_id": str(row["inpt_mbr_id"]) if pd.notna(row["inpt_mbr_id"]) else "",
-                    "professor_info": professor_info
-                })
-        
-        return application_list
+        return get_patent_application_ids(conn, limit)
     
-    def fetch_patent_data(self, application_id: str, inpt_mbr_id: str = "", professor_info: Dict = None) -> Optional[Dict]:
+    def fetch_patent_data(self, application_id: str, mbr_sn: str = "", professor_info: Dict = None) -> Optional[Dict]:
         """
         KIPRIS API에서 특정 출원번호의 특허 데이터를 가져옵니다.
         
@@ -240,7 +151,7 @@ class KIPRISCollector:
                 # 예시 코드 구조를 참고하여 findtext 사용
                 result_data = {
                     "tech_aplct_id": application_id,
-                    "inpt_mbr_id": inpt_mbr_id,  # 교수 사번
+                    "mbr_sn": mbr_sn,  # 교수 사번
                     "kipris_index_no": item.findtext("indexNo", default=""),
                     "kipris_register_status": item.findtext("registerStatus", default=""),
                     "kipris_application_date": item.findtext("applicationDate", default=""),
@@ -407,14 +318,14 @@ class KIPRISCollector:
             
             for idx, app_info in enumerate(application_list, 1):
                 app_id = app_info["tech_aplct_id"]
-                inpt_mbr_id = app_info["inpt_mbr_id"]
+                mbr_sn = app_info["mbr_sn"]
                 professor_info = app_info.get("professor_info", {})
                 prof_name = professor_info.get("NM", "알 수 없음")
-                print(f"[{idx}/{total}] 처리 중: {app_id} (교수: {prof_name}, 사번: {inpt_mbr_id})")
+                print(f"[{idx}/{total}] 처리 중: {app_id} (교수: {prof_name}, 사번: {mbr_sn})")
                 
                 try:
                     # 특허 데이터 수집
-                    patent_data = self.fetch_patent_data(app_id, inpt_mbr_id, professor_info)
+                    patent_data = self.fetch_patent_data(app_id, mbr_sn, professor_info)
                     
                     if patent_data:
                         collected_data.append(patent_data)
@@ -445,12 +356,12 @@ class KIPRISCollector:
                     if "professor_info" in item and item["professor_info"]:
                         # professor_info가 비어있지 않은 경우만 저장
                         prof_info = item["professor_info"]
-                        if prof_info and prof_info.get("EMP_NO"):
+                        if prof_info and prof_info.get("SQ"):
                             filtered_data.append(item)
                 
                 if filtered_data:
-                    # 특허 데이터 저장 (data/patent 폴더)
-                    patent_output_file = Path("data/patent/kipris_data.json")
+                    # 특허 데이터 저장
+                    patent_output_file = Path(PATENT_DATA_FILE)
                     patent_output_file.parent.mkdir(parents=True, exist_ok=True)
                     
                     with open(patent_output_file, 'w', encoding='utf-8') as f:

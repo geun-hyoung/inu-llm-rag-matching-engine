@@ -45,8 +45,8 @@ models/cache/
 *.pth
 *.ckpt
 
-# Results (선택적)
-# results/*.json
+# Results
+results/
 
 # OS
 .DS_Store

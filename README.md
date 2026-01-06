@@ -4,69 +4,41 @@ Industry-Academia Matching Algorithm Project for University Members
 
 ## Project Overview
 
-This project collects industry-academia knowledge information for university members (professors, researchers, etc.).
-It collects patent data through the KIPRIS API and stores it along with professor information.
+This project collects industry-academia knowledge information for university members (professors, researchers, etc.) and performs exploratory data analysis (EDA) on the collected data.
 
 ## Features
 
-1. **KIPRIS Patent Data Collection**
-   - Query patent application numbers from MariaDB `tb_inu_tech` table
-   - Match professor information by joining with `v_emp1` table
-   - Collect detailed patent information through KIPRIS API
-   - Save to JSON file
+1. **Data Collection**
+   - Patent data collection through KIPRIS API
+   - Article data collection through EBSCO
+   - Data is stored with professor information
+
+2. **Data Exploration**
+   - Exploratory Data Analysis (EDA) for patent data
+   - Analysis focused on professor-patent relationships
+   - Results saved in JSON format
 
 ## Project Structure
 
 ```
 inu-llm-rag-matching-engine/
 ├── data/                    # Data storage directory
+│   ├── article/             # Article data
 │   └── patent/              # Patent data
-│       └── kipris_data.json # Collected patent data with professor info
 ├── data_collection/         # Data collection module
-│   ├── __init__.py
-│   └── kipris_collector.py  # KIPRIS patent data collector
+│   ├── article_collection.py
+│   └── patent_collection.py
+├── data_exploration/        # Data exploration module
+│   └── patent_eda.py
 ├── config/                  # Configuration files
-│   ├── __init__.py
-│   ├── database.py          # Database connection settings (gitignored)
-│   └── settings.py          # Project settings - API keys (gitignored)
+│   ├── database.py          # Database connection settings
+│   └── settings.py          # Project settings
+├── results/                 # Analysis results
+│   └── eda/                 # EDA results
 ├── .gitignore
 ├── requirements.txt
 └── README.md
 ```
-
-## Usage
-
-### KIPRIS Patent Data Collection
-
-```python
-from data_collection.kipris_collector import KIPRISCollector
-from config.settings import KIPRIS_API_KEY
-
-# Create collector
-collector = KIPRISCollector(api_key=KIPRIS_API_KEY)
-
-# Collect and save to JSON file
-# limit=None: collect all (until API rate limit)
-collector.collect_and_save(limit=None)
-```
-
-## Collected Data Structure
-
-### Patent Data (`data/patent/kipris_data.json`)
-
-Each record contains:
-- `tech_aplct_id`: Patent application number
-- `inpt_mbr_id`: Professor employee ID
-- `kipris_index_no`: KIPRIS index number
-- `kipris_register_status`: Registration status
-- `kipris_application_date`: Application date
-- `kipris_abstract`: Patent abstract
-- `kipris_application_name`: Invention title
-- `professor_info`: Professor information (all fields from `v_emp1` table)
-  - `EMP_NO`: Employee number
-  - `NM`: Name
-  - `HG_NM`: Department name
-  - And other fields from `v_emp1` table
 
 ## Setup
 
@@ -79,11 +51,29 @@ venv\Scripts\activate  # Windows
 2. Install dependencies:
 ```bash
 pip install -r requirements.txt
+python -m playwright install  # Install Playwright browsers
 ```
 
 3. Configure settings:
-   - Copy `config/database.py.example` to `config/database.py` and set database credentials
-   - Copy `config/settings.py.example` to `config/settings.py` and set KIPRIS API key
+   - Set database credentials in `config/database.py`
+   - Set API keys in `config/settings.py`
+
+## Usage
+
+### Patent Data Collection
+```bash
+python data_collection/patent_collection.py
+```
+
+### Article Data Collection
+```bash
+python data_collection/article_collection.py
+```
+
+### Data Exploration
+```bash
+python data_exploration/patent_eda.py
+```
 
 ## Development Environment
 
