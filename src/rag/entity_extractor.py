@@ -193,20 +193,8 @@ class EntityRelationExtractor:
             record_type = match.group(1).lower()
             fields_str = match.group(2)
 
-            # 필드 분리 (따옴표 안의 내용 고려)
-            fields = []
-            current = ""
-            in_quotes = False
-            for char in fields_str:
-                if char == '"' and (not current or current[-1] != '\\'):
-                    in_quotes = not in_quotes
-                elif fields_str[len(current):].startswith(TUPLE_DELIMITER) and not in_quotes:
-                    fields.append(current.strip().strip('"'))
-                    current = ""
-                    continue
-                current += char
-            if current:
-                fields.append(current.strip().strip('"'))
+            # 필드 분리 (TUPLE_DELIMITER로 단순 분리)
+            fields = [f.strip().strip('"') for f in fields_str.split(TUPLE_DELIMITER)]
 
             try:
                 if record_type == "entity" and len(fields) >= 3:
