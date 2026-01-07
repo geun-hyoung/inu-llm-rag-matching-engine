@@ -10,3 +10,6 @@ requests>=2.28.0
 
 # Web Automation (for article collection)
 playwright>=1.40.0
+
+# LLM & Embedding
+openai>=1.0.0
