@@ -1,32 +1,158 @@
 """
 Embedding Model
-Text embedding model implementation
+임베딩 모델 구현 - Qwen3 (GPU) / OpenAI (API) 자동 전환
 """
+
+from typing import List, Union
+import numpy as np
+import sys
+from pathlib import Path
+
+sys.path.append(str(Path(__file__).parent.parent.parent))
+from config.settings import (
+    QWEN_EMBEDDING_MODEL, QWEN_EMBEDDING_DIM,
+    OPENAI_EMBEDDING_MODEL, OPENAI_EMBEDDING_DIM,
+    OPENAI_API_KEY
+)
 
 
 class EmbeddingModel:
-    """임베딩 모델 클래스"""
-    
-    def __init__(self, model_name: str = None):
+    """임베딩 모델 클래스 - GPU/API 자동 전환"""
+
+    def __init__(self, force_api: bool = False):
         """
         임베딩 모델 초기화
-        
+
         Args:
-            model_name: 모델 이름
+            force_api: True면 GPU 유무와 관계없이 OpenAI API 사용
         """
-        self.model_name = model_name
-        # TODO: 모델 로드 로직 구현
-    
-    def encode(self, texts):
+        self.force_api = force_api
+        self.model = None
+        self.tokenizer = None
+        self.client = None
+        self.use_gpu = False
+
+        self._init_model()
+
+    def _init_model(self):
+        """환경에 맞는 모델 초기화"""
+        if self.force_api:
+            print("Using OpenAI API (forced)")
+            self._init_openai()
+            return
+
+        # CUDA 체크
+        try:
+            import torch
+            if torch.cuda.is_available():
+                print(f"CUDA available: {torch.cuda.get_device_name(0)}")
+                self._init_qwen()
+                self.use_gpu = True
+            else:
+                print("CUDA not available, falling back to OpenAI API")
+                self._init_openai()
+        except ImportError:
+            print("PyTorch not installed, using OpenAI API")
+            self._init_openai()
+
+    def _init_qwen(self):
+        """Qwen3 모델 로드 (GPU)"""
+        import torch
+        from transformers import AutoModel, AutoTokenizer
+
+        print(f"Loading Qwen3 model: {QWEN_EMBEDDING_MODEL}")
+        print("This may take a while on first run (downloading ~16GB)...")
+
+        self.tokenizer = AutoTokenizer.from_pretrained(QWEN_EMBEDDING_MODEL)
+        self.model = AutoModel.from_pretrained(
+            QWEN_EMBEDDING_MODEL,
+            torch_dtype=torch.float16,
+            device_map="auto"
+        )
+        self.model.eval()
+        print("Qwen3 model loaded successfully")
+
+    def _init_openai(self):
+        """OpenAI 클라이언트 초기화"""
+        from openai import OpenAI
+
+        if not OPENAI_API_KEY:
+            raise ValueError("OPENAI_API_KEY not found in config/settings.py")
+
+        self.client = OpenAI(api_key=OPENAI_API_KEY)
+        print(f"OpenAI client initialized with model: {OPENAI_EMBEDDING_MODEL}")
+
+    def encode(self, texts: Union[str, List[str]]) -> np.ndarray:
         """
-        텍스트를 임베딩 벡터로 변환합니다.
-        
+        텍스트를 임베딩 벡터로 변환
+
         Args:
             texts: 텍스트 리스트 또는 단일 텍스트
-            
-        Returns:
-            임베딩 벡터 또는 벡터 리스트
-        """
-        # TODO: 임베딩 생성 로직 구현
-        pass
 
+        Returns:
+            임베딩 벡터 (numpy array)
+        """
+        if isinstance(texts, str):
+            texts = [texts]
+
+        if self.use_gpu:
+            return self._encode_qwen(texts)
+        else:
+            return self._encode_openai(texts)
+
+    def _encode_qwen(self, texts: List[str]) -> np.ndarray:
+        """Qwen3로 임베딩 생성"""
+        import torch
+
+        with torch.no_grad():
+            inputs = self.tokenizer(
+                texts,
+                padding=True,
+                truncation=True,
+                max_length=8192,
+                return_tensors="pt"
+            ).to(self.model.device)
+
+            outputs = self.model(**inputs)
+            embeddings = outputs.last_hidden_state.mean(dim=1)
+            embeddings = torch.nn.functional.normalize(embeddings, p=2, dim=1)
+
+        return embeddings.cpu().numpy()
+
+    def _encode_openai(self, texts: List[str]) -> np.ndarray:
+        """OpenAI API로 임베딩 생성"""
+        response = self.client.embeddings.create(
+            model=OPENAI_EMBEDDING_MODEL,
+            input=texts
+        )
+
+        embeddings = [item.embedding for item in response.data]
+        return np.array(embeddings)
+
+    @property
+    def dimension(self) -> int:
+        """임베딩 차원 반환"""
+        if self.use_gpu:
+            return QWEN_EMBEDDING_DIM
+        else:
+            return OPENAI_EMBEDDING_DIM
+
+    @property
+    def model_name(self) -> str:
+        """모델 이름 반환"""
+        if self.use_gpu:
+            return QWEN_EMBEDDING_MODEL
+        else:
+            return OPENAI_EMBEDDING_MODEL
+
+
+if __name__ == "__main__":
+    # 테스트
+    model = EmbeddingModel()
+    print(f"Model: {model.model_name}")
+    print(f"Dimension: {model.dimension}")
+
+    # 샘플 텍스트 임베딩
+    test_texts = ["딥러닝 기반 의료영상 분석", "자연어 처리 연구"]
+    embeddings = model.encode(test_texts)
+    print(f"Embeddings shape: {embeddings.shape}")
