@@ -8,9 +8,11 @@ import sys
 from pathlib import Path
 from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass
+import numpy as np
 
 sys.path.append(str(Path(__file__).parent.parent.parent))
 from config.settings import OPENAI_API_KEY, LLM_MODEL, RAG_STORE_DIR
+from src.embedding.encoder import Embedder
 
 
 @dataclass
@@ -57,18 +59,29 @@ class LightRAGExtractor:
         """LightRAG 초기화"""
         try:
             from lightrag import LightRAG, QueryParam
-            from lightrag.llm import gpt_4o_mini_complete
+
+            # 커스텀 임베딩 함수 생성
+            self.embedder = Embedder()
+
+            async def custom_embedding_func(texts: list[str]) -> np.ndarray:
+                """우리 Embedder를 LightRAG에서 사용할 수 있도록 래핑"""
+                return self.embedder.encode(texts)
 
             self.rag = LightRAG(
                 working_dir=str(self.working_dir),
-                llm_model_func=gpt_4o_mini_complete,
                 llm_model_name=LLM_MODEL,
+                embedding_func=custom_embedding_func,
+                embedding_dim=self.embedder.dimension,
             )
             print(f"LightRAG initialized with model: {LLM_MODEL}")
+            print(f"Using custom embedder: {self.embedder.model_name} (dim={self.embedder.dimension})")
 
         except ImportError as e:
             print(f"LightRAG import error: {e}")
             print("Please install: pip install lightrag-hku")
+            raise
+        except Exception as e:
+            print(f"LightRAG init error: {e}")
             raise
 
     def extract_from_document(
