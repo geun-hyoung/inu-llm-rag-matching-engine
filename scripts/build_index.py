@@ -300,8 +300,8 @@ def main():
     parser.add_argument(
         "--force-api",
         action="store_true",
-        default=True,
-        help="Force use OpenAI API for embeddings"
+        default=False,
+        help="Force use OpenAI API for embeddings (default: auto-detect GPU)"
     )
 
     args = parser.parse_args()
