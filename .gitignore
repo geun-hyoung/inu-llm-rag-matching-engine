@@ -72,3 +72,6 @@ config/settings.py
 .coverage
 htmlcov/
 
+# claude
+.claude/
+CLAUDE_PROJECT_GUIDE.md
