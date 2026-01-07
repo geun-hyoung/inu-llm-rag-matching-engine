@@ -21,18 +21,12 @@ TUPLE_DELIMITER = "<|>"
 RECORD_DELIMITER = "##"
 COMPLETION_DELIMITER = "<|COMPLETE|>"
 
-# 엔티티 타입 (LightRAG 기본 + 우리 도메인 확장)
+# 엔티티 타입 (LightRAG 원본)
 DEFAULT_ENTITY_TYPES = [
-    "organization",  # 기관, 회사
-    "person",        # 인물
-    "technology",    # 기술
-    "method",        # 방법론, 알고리즘
-    "domain",        # 분야, 영역
-    "application",   # 응용, 적용처
-    "material",      # 재료, 물질
-    "device",        # 장치, 기기
-    "concept",       # 개념
-    "event"          # 이벤트
+    "organization",
+    "person",
+    "geo",
+    "event"
 ]
 
 
@@ -76,7 +70,7 @@ For each pair of related entities, extract the following information:
 - relationship_keywords: one or more high-level key words that summarize the overarching nature of the relationship, focusing on concepts or themes rather than specific details
 Format each relationship as ("relationship"{tuple_delimiter}<source_entity>{tuple_delimiter}<target_entity>{tuple_delimiter}<relationship_description>{tuple_delimiter}<relationship_keywords>)
 
-3. Return output in the language of the given text.
+3. Return output in Korean (한국어). All entity names, descriptions, and relationship descriptions must be in Korean.
 
 4. When finished, output {completion_delimiter}
 
