@@ -92,18 +92,18 @@ class GraphStore:
         self,
         source_entity: str,
         target_entity: str,
-        relation_type: str,
+        keywords: str,
         doc_id: str,
         emp_no: str,
         description: str = ""
     ):
         """
-        관계 엣지 추가 (동일 관계면 sources에 추가, weight 증가)
+        관계 엣지 추가 (동일 관계면 sources, keywords에 추가, weight 증가)
 
         Args:
             source_entity: 소스 엔티티
             target_entity: 타겟 엔티티
-            relation_type: 관계 타입
+            keywords: 관계 키워드 (LightRAG 스타일)
             doc_id: 문서 ID
             emp_no: 교수 사번
             description: 설명
@@ -114,18 +114,24 @@ class GraphStore:
             # 기존 엣지에 source 추가
             edge_data = self.graph.edges[source_entity, target_entity]
             sources = edge_data.get("sources", [])
+            keywords_list = edge_data.get("keywords", [])
 
             if new_source not in sources:
                 sources.append(new_source)
                 self.graph.edges[source_entity, target_entity]["sources"] = sources
                 # weight 증가 (관계 빈도)
                 self.graph.edges[source_entity, target_entity]["weight"] = len(sources)
+
+            # 새 키워드 추가 (중복 제거)
+            if keywords and keywords not in keywords_list:
+                keywords_list.append(keywords)
+                self.graph.edges[source_entity, target_entity]["keywords"] = keywords_list
         else:
             # 새 엣지 추가
             self.graph.add_edge(
                 source_entity,
                 target_entity,
-                relation_type=relation_type,
+                keywords=[keywords] if keywords else [],
                 description=description,
                 sources=[new_source],
                 weight=1
@@ -152,13 +158,13 @@ class GraphStore:
         관계 배치 추가
 
         Args:
-            relations: 관계 리스트 (source_entity, target_entity, relation_type, source_doc_id, emp_no)
+            relations: 관계 리스트 (source_entity, target_entity, keywords, source_doc_id, emp_no)
         """
         for relation in relations:
             self.add_relation(
                 source_entity=relation["source_entity"],
                 target_entity=relation["target_entity"],
-                relation_type=relation.get("relation_type", "RELATED_TO"),
+                keywords=relation.get("keywords", ""),
                 doc_id=relation.get("source_doc_id", ""),
                 emp_no=relation.get("emp_no", ""),
                 description=relation.get("description", "")
@@ -261,7 +267,7 @@ class GraphStore:
         return {
             "source": source_entity,
             "target": target_entity,
-            "relation_type": edge_data.get("relation_type", "RELATED_TO"),
+            "keywords": edge_data.get("keywords", []),
             "description": edge_data.get("description", ""),
             "sources": edge_data.get("sources", []),
             "weight": edge_data.get("weight", 1)
@@ -380,7 +386,7 @@ if __name__ == "__main__":
     store.add_relation(
         source_entity="딥러닝",
         target_entity="의료영상분석",
-        relation_type="APPLIES_TO",
+        keywords="image processing, diagnosis, AI application",
         doc_id="patent_001",
         emp_no="P12345"
     )

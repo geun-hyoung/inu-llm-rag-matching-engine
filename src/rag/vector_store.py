@@ -163,16 +163,17 @@ class ChromaVectorStore:
 
             ids.append(rel_id)
 
-            # 관계 설명 텍스트 (임베딩 대상)
+            # 관계 설명 텍스트 (임베딩 대상) - keywords 포함
             rel_text = relation.get("description", "")
+            keywords = relation.get("keywords", "")
             if not rel_text:
-                rel_text = f"{relation['source_entity']} {relation['relation_type']} {relation['target_entity']}"
+                rel_text = f"{relation['source_entity']} {keywords} {relation['target_entity']}"
             documents.append(rel_text)
 
             metadatas.append({
                 "source_entity": relation["source_entity"],
                 "target_entity": relation["target_entity"],
-                "relation_type": relation.get("relation_type", "RELATED_TO"),
+                "keywords": keywords,
                 "source_doc_id": relation.get("source_doc_id", ""),
                 "emp_no": relation.get("emp_no", ""),
                 "doc_type": doc_type

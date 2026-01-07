@@ -26,7 +26,7 @@ from config.settings import (
     ARTICLE_DATA_FILE
 )
 from src.preprocessing.text_processor import TextProcessor
-from src.rag.lightrag_wrapper import LightRAGExtractor
+from src.rag.entity_extractor import EntityRelationExtractor
 from src.rag.vector_store import ChromaVectorStore
 from src.rag.graph_store import GraphStore
 from src.embedding.encoder import Embedder
@@ -55,7 +55,7 @@ class IndexBuilder:
 
         # 모듈 초기화
         self.text_processor = TextProcessor()
-        self.extractor = LightRAGExtractor()
+        self.extractor = EntityRelationExtractor()
         self.embedder = Embedder(force_api=force_api)
         self.vector_store = ChromaVectorStore()
         self.graph_store = GraphStore(doc_type=doc_type)
@@ -168,9 +168,9 @@ class IndexBuilder:
             for e in entities
         ]
 
-        # 관계 임베딩 (description 또는 source-relation-target 형식)
+        # 관계 임베딩 (description 또는 source-keywords-target 형식)
         relation_texts = [
-            r.get("description") or f"{r['source_entity']} {r['relation_type']} {r['target_entity']}"
+            r.get("description") or f"{r['source_entity']} {r.get('keywords', '')} {r['target_entity']}"
             for r in relations
         ]
 
