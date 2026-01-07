@@ -15,3 +15,8 @@ playwright>=1.40.0
 openai>=2.14.0
 lightrag-hku>=1.4.9
 
+# Vector DB
+chromadb>=1.4.0
+
+# Loading Bar
+tqdm>=4.67.1
