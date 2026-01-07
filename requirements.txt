@@ -12,4 +12,6 @@ requests>=2.28.0
 playwright>=1.40.0
 
 # LLM & Embedding
-openai>=1.0.0
+openai>=2.14.0
+lightrag-hku>=1.4.9
+
