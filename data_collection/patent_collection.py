@@ -76,6 +76,44 @@ class KIPRISCollector:
         """
         return get_patent_application_ids(conn, limit)
     
+    def get_original_patent_data(self, conn: mariadb.Connection, application_id: str) -> Optional[Dict]:
+        """
+        원본 특허 테이블에서 해당 출원번호의 모든 데이터를 가져옵니다.
+        
+        Args:
+            conn: 데이터베이스 연결 객체
+            application_id: 특허 출원번호 (tech_aplct_id)
+            
+        Returns:
+            원본 테이블 데이터 딕셔너리 또는 None
+        """
+        try:
+            # application_id는 이미 검증된 값이므로 안전하게 사용
+            query = f"SELECT * FROM {TARGET_TABLE} WHERE {TARGET_ID_COLUMN} = '{application_id}' LIMIT 1"
+            df = pd.read_sql(query, conn)
+            
+            if df.empty:
+                return None
+            
+            # 첫 번째 행을 딕셔너리로 변환 (NaN 값 처리)
+            row = df.iloc[0]
+            original_data = {}
+            for col in df.columns:
+                value = row[col]
+                if pd.notna(value):
+                    # 숫자 타입은 그대로, 문자열은 str로 변환
+                    if isinstance(value, (int, float)):
+                        original_data[col] = value
+                    else:
+                        original_data[col] = str(value)
+                else:
+                    original_data[col] = None
+            
+            return original_data
+        except Exception as e:
+            print(f"  - 원본 데이터 조회 실패 ({application_id}): {e}")
+            return None
+    
     def fetch_patent_data(self, application_id: str, mbr_sn: str = "", professor_info: Dict = None) -> Optional[Dict]:
         """
         KIPRIS API에서 특정 출원번호의 특허 데이터를 가져옵니다.
@@ -324,11 +362,28 @@ class KIPRISCollector:
                 print(f"[{idx}/{total}] 처리 중: {app_id} (교수: {prof_name}, 사번: {mbr_sn})")
                 
                 try:
-                    # 특허 데이터 수집
-                    patent_data = self.fetch_patent_data(app_id, mbr_sn, professor_info)
+                    # 원본 테이블 데이터 가져오기
+                    original_data = self.get_original_patent_data(conn, app_id)
                     
-                    if patent_data:
-                        collected_data.append(patent_data)
+                    # KIPRIS API에서 특허 데이터 수집
+                    kipris_data = self.fetch_patent_data(app_id, mbr_sn, professor_info)
+                    
+                    if kipris_data:
+                        # 원본 데이터와 KIPRIS 데이터 병합 (KIPRIS 데이터가 우선)
+                        merged_data = {}
+                        
+                        # 먼저 원본 데이터 추가
+                        if original_data:
+                            merged_data.update(original_data)
+                        
+                        # KIPRIS 데이터 추가 (같은 키가 있으면 덮어씀)
+                        merged_data.update(kipris_data)
+                        
+                        # 교수 정보는 항상 포함 (kipris_data에 이미 포함되어 있지만 확실하게)
+                        if professor_info:
+                            merged_data["professor_info"] = professor_info
+                        
+                        collected_data.append(merged_data)
                 
                 except Exception as e:
                     error_msg = str(e)

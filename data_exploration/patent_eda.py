@@ -5,14 +5,23 @@
 
 import json
 import pandas as pd
+import numpy as np
 from pathlib import Path
 import sys
 from typing import Dict, Any, List
 from collections import Counter, defaultdict
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 # 상위 디렉토리를 경로에 추가
 sys.path.append(str(Path(__file__).parent.parent))
 from config.settings import PATENT_DATA_FILE, EDA_RESULTS_DIR
+
+# 한글 폰트 설정 (Windows)
+plt.rcParams['font.family'] = 'Malgun Gothic'
+plt.rcParams['axes.unicode_minus'] = False  # 마이너스 기호 깨짐 방지
+sns.set_style("whitegrid")
+sns.set_palette("husl")
 
 
 def load_patent_data(file_path: str) -> List[Dict]:
@@ -241,6 +250,155 @@ def analyze_patent_content(data: List[Dict]) -> Dict[str, Any]:
     }
 
 
+def analyze_abstract_detailed(data: List[Dict]) -> Dict[str, Any]:
+    """초록(kipris_abstract)에 대한 상세 분석"""
+    if not data:
+        return {}
+    
+    abstracts = []
+    abstract_lengths = []
+    
+    for item in data:
+        abstract = item.get("kipris_abstract", "")
+        if abstract and abstract.strip():  # 비어있지 않은 경우만
+            abstracts.append(abstract)
+            abstract_lengths.append(len(abstract))
+    
+    total_items = len(data)
+    missing_count = total_items - len(abstracts)
+    missing_rate = (missing_count / total_items * 100) if total_items > 0 else 0
+    
+    if not abstract_lengths:
+        return {
+            "total_items": total_items,
+            "missing_count": missing_count,
+            "missing_rate": missing_rate,
+            "error": "초록 데이터가 없습니다."
+        }
+    
+    # 기술 통계량 계산
+    lengths_array = np.array(abstract_lengths)
+    
+    # 4분위수 계산
+    q1 = np.percentile(lengths_array, 25)
+    q2 = np.percentile(lengths_array, 50)  # 중앙값
+    q3 = np.percentile(lengths_array, 75)
+    iqr = q3 - q1  # 사분위 범위
+    
+    # 기술 통계량
+    mean_length = np.mean(lengths_array)
+    median_length = np.median(lengths_array)
+    std_length = np.std(lengths_array)
+    min_length = np.min(lengths_array)
+    max_length = np.max(lengths_array)
+    
+    # 분위수별 개수
+    q1_count = np.sum(lengths_array <= q1)
+    q2_count = np.sum(lengths_array <= q2)
+    q3_count = np.sum(lengths_array <= q3)
+    
+    return {
+        "total_items": total_items,
+        "missing_count": missing_count,
+        "missing_rate": round(missing_rate, 2),
+        "valid_count": len(abstracts),
+        "valid_rate": round((len(abstracts) / total_items * 100) if total_items > 0 else 0, 2),
+        "descriptive_statistics": {
+            "min": int(min_length),
+            "max": int(max_length),
+            "mean": round(mean_length, 2),
+            "median": int(median_length),
+            "std": round(std_length, 2),
+            "q1": int(q1),
+            "q2": int(q2),
+            "q3": int(q3),
+            "iqr": int(iqr)
+        },
+        "quartile_distribution": {
+            "q1_under": int(q1_count),
+            "q1_to_q2": int(np.sum((lengths_array > q1) & (lengths_array <= q2))),
+            "q2_to_q3": int(np.sum((lengths_array > q2) & (lengths_array <= q3))),
+            "q3_over": int(np.sum(lengths_array > q3))
+        },
+        "length_summary": {
+            "shortest": min(abstract_lengths),
+            "longest": max(abstract_lengths),
+            "shortest_text": abstracts[np.argmin(abstract_lengths)][:100] + "..." if abstracts else "",
+            "longest_text": abstracts[np.argmax(abstract_lengths)][:100] + "..." if abstracts else ""
+        }
+    }
+
+
+def visualize_abstract_distribution(data: List[Dict], output_dir: Path):
+    """초록 길이 분포 시각화 - 간단하고 트렌드한 학술적 스타일"""
+    if not data:
+        return
+    
+    abstract_lengths = []
+    for item in data:
+        abstract = item.get("kipris_abstract", "")
+        if abstract and abstract.strip():
+            abstract_lengths.append(len(abstract))
+    
+    if not abstract_lengths:
+        print("⚠️ 시각화할 초록 데이터가 없습니다.")
+        return
+    
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # 깔끔한 단일 히스토그램 (학술적이고 트렌드한 스타일)
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    # 히스토그램 (KDE 포함) - seaborn 스타일
+    sns.histplot(abstract_lengths, bins=40, kde=True, 
+                 color='#3498db', alpha=0.7, 
+                 edgecolor='white', linewidth=0.5)
+    
+    # 통계 선 표시
+    mean_val = np.mean(abstract_lengths)
+    median_val = np.median(abstract_lengths)
+    q1_val = np.percentile(abstract_lengths, 25)
+    q3_val = np.percentile(abstract_lengths, 75)
+    
+    ax.axvline(mean_val, color='#e74c3c', linestyle='--', linewidth=2, 
+               label=f'Mean: {mean_val:.0f}', zorder=5)
+    ax.axvline(median_val, color='#2ecc71', linestyle='--', linewidth=2, 
+               label=f'Median: {median_val:.0f}', zorder=5)
+    
+    # 스타일링 - 학술적이고 트렌드한 느낌
+    ax.set_xlabel('Abstract Length (characters)', fontsize=13, fontweight='bold')
+    ax.set_ylabel('Frequency', fontsize=13, fontweight='bold')
+    ax.set_title('Distribution of Patent Abstract Lengths', 
+                 fontsize=15, fontweight='bold', pad=20)
+    
+    # 그리드 (은은하게)
+    ax.grid(True, alpha=0.2, linestyle='-', linewidth=0.5)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_color('#cccccc')
+    ax.spines['bottom'].set_color('#cccccc')
+    
+    # 범례
+    ax.legend(loc='upper right', frameon=True, fancybox=True, 
+              shadow=True, fontsize=10)
+    
+    # 통계 정보를 텍스트로 간단히 추가 (하단에)
+    stats_text = f'n = {len(abstract_lengths):,} | ' \
+                 f'Q1: {q1_val:.0f} | Q3: {q3_val:.0f} | ' \
+                 f'SD: {np.std(abstract_lengths):.1f}'
+    ax.text(0.5, 0.02, stats_text, transform=ax.transAxes, 
+            ha='center', va='bottom', fontsize=9, 
+            bbox=dict(boxstyle='round', facecolor='white', alpha=0.8, edgecolor='none'),
+            style='italic')
+    
+    plt.tight_layout()
+    output_path = output_dir / "abstract_length_distribution.png"
+    plt.savefig(output_path, dpi=300, bbox_inches='tight', facecolor='white')
+    plt.close()
+    
+    print(f"✅ 초록 분포 시각화 저장 완료: {output_path}")
+
+
 def analyze_professor_info_completeness(data: List[Dict]) -> Dict[str, Any]:
     """교수 정보 완전성 분석"""
     if not data:
@@ -277,13 +435,16 @@ def analyze_professor_info_completeness(data: List[Dict]) -> Dict[str, Any]:
 
 
 def analyze_college_department_patents(data: List[Dict]) -> Dict[str, Any]:
-    """대학/학과별 특허 분석"""
+    """대학/학과별 특허 분석 (교수-특허 매핑 중심)"""
     if not data:
         return {}
     
     college_patents = defaultdict(int)
     department_patents = defaultdict(int)
     college_department = defaultdict(lambda: defaultdict(int))
+    college_professors = defaultdict(set)  # 단과대별 교수 집합
+    department_professors = defaultdict(set)  # 학과별 교수 집합
+    college_professor_patent_count = defaultdict(lambda: defaultdict(int))  # 단과대별 교수별 특허수
     
     for item in data:
         prof_info = item.get("professor_info", {})
@@ -292,19 +453,42 @@ def analyze_college_department_patents(data: List[Dict]) -> Dict[str, Any]:
         
         college = prof_info.get("COLG_NM", "")
         department = prof_info.get("HG_NM", "")
+        prof_id = prof_info.get("SQ") or prof_info.get("EMP_NO", "")
         
         if college:
             college_patents[college] += 1
+            if prof_id:
+                college_professors[college].add(prof_id)
+                college_professor_patent_count[college][prof_id] += 1
+        
         if department:
             department_patents[department] += 1
+            if prof_id:
+                department_professors[department].add(prof_id)
+        
         if college and department:
             college_department[college][department] += 1
+    
+    # 단과대별 평균 특허 수 (교수당)
+    college_avg_patents = {}
+    for college, prof_patents in college_professor_patent_count.items():
+        prof_count = len(prof_patents)
+        if prof_count > 0:
+            avg_patents = sum(prof_patents.values()) / prof_count
+            college_avg_patents[college] = round(avg_patents, 2)
+    
+    # 단과대별 교수당 평균 특허수 순위
+    top_colleges_by_avg = sorted(college_avg_patents.items(), key=lambda x: x[1], reverse=True)[:10]
     
     return {
         "college_patent_distribution": dict(sorted(college_patents.items(), key=lambda x: x[1], reverse=True)),
         "department_patent_distribution": dict(sorted(department_patents.items(), key=lambda x: x[1], reverse=True)),
         "top_colleges": list(sorted(college_patents.items(), key=lambda x: x[1], reverse=True))[:10],
         "top_departments": list(sorted(department_patents.items(), key=lambda x: x[1], reverse=True))[:10],
+        "college_professor_count": {college: len(profs) for college, profs in college_professors.items()},
+        "department_professor_count": {dept: len(profs) for dept, profs in department_professors.items()},
+        "college_avg_patents_per_professor": college_avg_patents,
+        "top_colleges_by_avg_patents": top_colleges_by_avg,
         "college_department_matrix": {
             college: dict(depts) 
             for college, depts in college_department.items()
@@ -382,13 +566,21 @@ def print_summary(results: Dict[str, Any]):
     # 대학/학과별 특허
     if "college_department" in results:
         cd = results["college_department"]
-        print(f"\n5️⃣  대학/학과별 특허 분포")
+        print(f"\n5️⃣  대학/학과별 특허 분포 (교수-특허 매핑)")
         print(f"   - 상위 대학 (특허 수):")
         for college, count in cd.get("top_colleges", [])[:5]:
-            print(f"     * {college}: {count:,}개")
+            prof_count = cd.get("college_professor_count", {}).get(college, 0)
+            avg_patents = cd.get("college_avg_patents_per_professor", {}).get(college, 0)
+            print(f"     * {college}: {count:,}개 (교수 {prof_count}명, 교수당 평균 {avg_patents:.2f}개)")
         print(f"   - 상위 학과 (특허 수):")
         for dept, count in cd.get("top_departments", [])[:5]:
-            print(f"     * {dept}: {count:,}개")
+            prof_count = cd.get("department_professor_count", {}).get(dept, 0)
+            print(f"     * {dept}: {count:,}개 (교수 {prof_count}명)")
+        print(f"   - 교수당 평균 특허수 상위 단과대:")
+        for college, avg in cd.get("top_colleges_by_avg_patents", [])[:5]:
+            total = cd.get("college_patent_distribution", {}).get(college, 0)
+            prof_count = cd.get("college_professor_count", {}).get(college, 0)
+            print(f"     * {college}: 교수당 평균 {avg:.2f}개 (총 {total}개, 교수 {prof_count}명)")
     
     # 특허 내용
     if "content" in results:
@@ -402,6 +594,37 @@ def print_summary(results: Dict[str, Any]):
         print(f"   - 요약: {abstracts.get('total', 0):,}개")
         if abstracts.get("length_stats"):
             print(f"     평균 길이: {abstracts['length_stats'].get('mean', 0):.1f}자")
+    
+    # 초록 상세 분석
+    if "abstract_detailed" in results:
+        abs_detail = results["abstract_detailed"]
+        if "error" not in abs_detail:
+            print(f"\n8️⃣  초록(Abstract) 상세 분석")
+            print(f"   - 총 데이터: {abs_detail.get('total_items', 0):,}개")
+            print(f"   - 유효 초록: {abs_detail.get('valid_count', 0):,}개 ({abs_detail.get('valid_rate', 0)}%)")
+            print(f"   - 결측치: {abs_detail.get('missing_count', 0):,}개 ({abs_detail.get('missing_rate', 0)}%)")
+            
+            stats = abs_detail.get("descriptive_statistics", {})
+            if stats:
+                print(f"\n   - 기술 통계량:")
+                print(f"     * 최소값: {stats.get('min', 0):,}자")
+                print(f"     * 최대값: {stats.get('max', 0):,}자")
+                print(f"     * 평균: {stats.get('mean', 0):.2f}자")
+                print(f"     * 중앙값 (Q2): {stats.get('median', 0):,}자")
+                print(f"     * 표준편차: {stats.get('std', 0):.2f}자")
+                print(f"\n   - 4분위수:")
+                print(f"     * Q1 (1사분위수): {stats.get('q1', 0):,}자")
+                print(f"     * Q2 (2사분위수, 중앙값): {stats.get('q2', 0):,}자")
+                print(f"     * Q3 (3사분위수): {stats.get('q3', 0):,}자")
+                print(f"     * IQR (사분위 범위): {stats.get('iqr', 0):,}자")
+            
+            quartile = abs_detail.get("quartile_distribution", {})
+            if quartile:
+                print(f"\n   - 4분위수별 분포:")
+                print(f"     * Q1 이하: {quartile.get('q1_under', 0):,}개")
+                print(f"     * Q1~Q2: {quartile.get('q1_to_q2', 0):,}개")
+                print(f"     * Q2~Q3: {quartile.get('q2_to_q3', 0):,}개")
+                print(f"     * Q3 초과: {quartile.get('q3_over', 0):,}개")
     
     # 교수 정보 완전성
     if "professor_completeness" in results:
@@ -434,7 +657,8 @@ def main():
         "timeline": analyze_patent_timeline(data),
         "content": analyze_patent_content(data),
         "professor_completeness": analyze_professor_info_completeness(data),
-        "college_department": analyze_college_department_patents(data)
+        "college_department": analyze_college_department_patents(data),
+        "abstract_detailed": analyze_abstract_detailed(data)
     }
     
     # 결과 출력
@@ -443,6 +667,9 @@ def main():
     # 결과 저장
     output_path = Path(EDA_RESULTS_DIR) / "patent_eda_results.json"
     save_results(results, output_path)
+    
+    # 초록 분포 시각화
+    visualize_abstract_distribution(data, Path(EDA_RESULTS_DIR))
 
 
 if __name__ == "__main__":
