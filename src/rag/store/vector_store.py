@@ -22,17 +22,22 @@ except ImportError:
 
 # 컬렉션 이름 상수
 COLLECTIONS = {
+    # 엔티티/관계 컬렉션 (LightRAG용)
     "patent_entities": "patent_entities",
     "patent_relations": "patent_relations",
     "article_entities": "article_entities",
     "article_relations": "article_relations",
     "project_entities": "project_entities",
     "project_relations": "project_relations",
+    # 청크 컬렉션 (Naive RAG용) - 문서 1개 = 청크 1개
+    "patent_chunks": "patent_chunks",
+    "article_chunks": "article_chunks",
+    "project_chunks": "project_chunks",
 }
 
 
 class ChromaVectorStore:
-    """ChromaDB 기반 벡터 저장소 - 6개 컬렉션 관리"""
+    """ChromaDB 기반 벡터 저장소 - 9개 컬렉션 관리 (엔티티/관계/청크)"""
 
     def __init__(self, persist_dir: str = None):
         """
@@ -187,6 +192,119 @@ class ChromaVectorStore:
         )
 
         print(f"Added {len(relations)} relations to {collection_name}")
+
+    def add_chunks(
+        self,
+        chunks: List[Dict],
+        embeddings: np.ndarray,
+        doc_type: str = "patent"
+    ):
+        """
+        문서 청크를 컬렉션에 추가 (Naive RAG용)
+
+        Args:
+            chunks: 청크 정보 리스트 (doc_id, text, title 등)
+            embeddings: 청크 임베딩 벡터
+            doc_type: 문서 타입 (patent/article/project)
+        """
+        if len(chunks) == 0:
+            return
+
+        collection_name = self._get_collection_name(doc_type, "chunks")
+        collection = self.collections[collection_name]
+
+        ids = []
+        documents = []
+        metadatas = []
+
+        for i, chunk in enumerate(chunks):
+            # 고유 ID: doc_type_chunk_doc_id
+            chunk_id = f"{doc_type}_c_{chunk['doc_id']}"
+            chunk_id = chunk_id.replace(" ", "_")[:100]
+
+            ids.append(chunk_id)
+            documents.append(chunk["text"])
+            metadatas.append({
+                "doc_id": chunk["doc_id"],
+                "title": chunk.get("title", ""),
+                "doc_type": doc_type
+            })
+
+        embeddings_list = embeddings.tolist() if isinstance(embeddings, np.ndarray) else embeddings
+
+        collection.upsert(
+            ids=ids,
+            embeddings=embeddings_list,
+            documents=documents,
+            metadatas=metadatas
+        )
+
+        print(f"Added {len(chunks)} chunks to {collection_name}")
+
+    def search_chunks(
+        self,
+        query_embedding: Union[List[float], np.ndarray],
+        doc_types: List[str] = None,
+        top_k: int = None
+    ) -> List[Dict]:
+        """
+        청크 검색 (Naive RAG용)
+
+        Args:
+            query_embedding: 쿼리 임베딩 벡터
+            doc_types: 검색할 문서 타입 리스트 (None이면 전체)
+            top_k: 반환할 결과 수
+
+        Returns:
+            검색 결과 리스트
+        """
+        if doc_types is None:
+            doc_types = ["patent", "article", "project"]
+
+        top_k = top_k or TOP_K_RESULTS
+
+        if isinstance(query_embedding, np.ndarray):
+            query_embedding = query_embedding.tolist()
+
+        all_results = []
+
+        for doc_type in doc_types:
+            collection_name = self._get_collection_name(doc_type, "chunks")
+            if collection_name not in self.collections:
+                continue
+
+            collection = self.collections[collection_name]
+
+            if collection.count() == 0:
+                continue
+
+            try:
+                results = collection.query(
+                    query_embeddings=[query_embedding],
+                    n_results=top_k,
+                    include=["documents", "metadatas", "distances"]
+                )
+
+                if results and results["ids"][0]:
+                    for i, id in enumerate(results["ids"][0]):
+                        distance = results["distances"][0][i] if results["distances"] else 0
+                        similarity = 1 - distance
+
+                        all_results.append({
+                            "id": id,
+                            "document": results["documents"][0][i] if results["documents"] else "",
+                            "metadata": results["metadatas"][0][i] if results["metadatas"] else {},
+                            "similarity": similarity,
+                            "doc_type": doc_type,
+                            "item_type": "chunk"
+                        })
+
+            except Exception as e:
+                print(f"Search error in {collection_name}: {e}")
+                continue
+
+        all_results.sort(key=lambda x: x["similarity"], reverse=True)
+        return all_results[:top_k]
 
     def search_entities(
         self,

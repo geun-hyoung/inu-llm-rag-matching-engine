@@ -65,6 +65,7 @@ class IndexBuilder:
             "docs_processed": 0,
             "entities_extracted": 0,
             "relations_extracted": 0,
+            "chunks_stored": 0,
             "errors": 0
         }
 
@@ -157,9 +158,10 @@ class IndexBuilder:
     def generate_embeddings(
         self,
         entities: List[Dict],
-        relations: List[Dict]
+        relations: List[Dict],
+        docs: List[Dict]
     ) -> tuple:
-        """임베딩 생성"""
+        """임베딩 생성 (엔티티, 관계, 청크)"""
         logger.info("Generating embeddings...")
 
         # 엔티티 임베딩 (description 또는 name 사용)
@@ -174,8 +176,12 @@ class IndexBuilder:
             for r in relations
         ]
 
+        # 청크 임베딩 (원본 문서 텍스트)
+        chunk_texts = [doc["text"] for doc in docs]
+
         entity_embeddings = None
         relation_embeddings = None
+        chunk_embeddings = None
 
         if entity_texts:
             logger.info(f"Encoding {len(entity_texts)} entities...")
@@ -185,18 +191,24 @@ class IndexBuilder:
             logger.info(f"Encoding {len(relation_texts)} relations...")
             relation_embeddings = self.embedder.encode(relation_texts)
 
+        if chunk_texts:
+            logger.info(f"Encoding {len(chunk_texts)} chunks...")
+            chunk_embeddings = self.embedder.encode(chunk_texts)
+
         logger.info("Embeddings generated")
 
-        return entity_embeddings, relation_embeddings
+        return entity_embeddings, relation_embeddings, chunk_embeddings
 
     def store_to_vector_db(
         self,
         entities: List[Dict],
         relations: List[Dict],
+        docs: List[Dict],
         entity_embeddings,
-        relation_embeddings
+        relation_embeddings,
+        chunk_embeddings
     ):
-        """ChromaDB에 저장"""
+        """ChromaDB에 저장 (엔티티, 관계, 청크)"""
         logger.info("Storing to ChromaDB...")
 
         if entities and entity_embeddings is not None:
@@ -212,6 +224,23 @@ class IndexBuilder:
                 embeddings=relation_embeddings,
                 doc_type=self.doc_type
             )
+
+        # 청크 저장 (Naive RAG용)
+        if docs and chunk_embeddings is not None:
+            chunks = [
+                {
+                    "doc_id": doc["doc_id"],
+                    "text": doc["text"],
+                    "title": doc.get("metadata", {}).get("title", "")
+                }
+                for doc in docs
+            ]
+            self.vector_store.add_chunks(
+                chunks=chunks,
+                embeddings=chunk_embeddings,
+                doc_type=self.doc_type
+            )
+            self.stats["chunks_stored"] = len(chunks)
 
         logger.info(f"ChromaDB stats: {self.vector_store.get_stats()}")
 
@@ -254,15 +283,15 @@ class IndexBuilder:
             logger.warning("No entities extracted. Stopping.")
             return
 
-        # 4. 임베딩 생성
-        entity_embeddings, relation_embeddings = self.generate_embeddings(
-            entities, relations
+        # 4. 임베딩 생성 (엔티티, 관계, 청크)
+        entity_embeddings, relation_embeddings, chunk_embeddings = self.generate_embeddings(
+            entities, relations, docs
         )
 
-        # 5. ChromaDB 저장
+        # 5. ChromaDB 저장 (엔티티, 관계, 청크)
         self.store_to_vector_db(
-            entities, relations,
-            entity_embeddings, relation_embeddings
+            entities, relations, docs,
+            entity_embeddings, relation_embeddings, chunk_embeddings
         )
 
         # 6. GraphStore 저장
