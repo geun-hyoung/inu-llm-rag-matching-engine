@@ -1,17 +1,10 @@
-"""RAG 평가 모듈 - RAGAS 스타일 LLM-as-Judge"""
+"""RAG 평가 모듈 - RAGAS 라이브러리 기반"""
 
 from .evaluator import RAGEvaluator
-from .metrics import (
-    context_relevance,
-    context_precision,
-    faithfulness,
-    answer_relevance
-)
+from .metrics import evaluate_rag, evaluate_batch
 
 __all__ = [
     "RAGEvaluator",
-    "context_relevance",
-    "context_precision",
-    "faithfulness",
-    "answer_relevance"
+    "evaluate_rag",
+    "evaluate_batch"
 ]

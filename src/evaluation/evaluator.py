@@ -14,7 +14,7 @@ from config.settings import RESULTS_DIR
 
 from src.rag.query.retriever import HybridRetriever
 from src.rag.query.naive_retriever import NaiveRetriever
-from src.evaluation.metrics import evaluate_all
+from src.evaluation.metrics import evaluate_rag
 
 
 class RAGEvaluator:
@@ -87,7 +87,7 @@ class RAGEvaluator:
         hybrid_contexts = self._extract_contexts(hybrid_results, "hybrid")
         hybrid_answer = hybrid_results.get("response", "")
 
-        hybrid_scores = evaluate_all(query, hybrid_contexts, hybrid_answer)
+        hybrid_scores = evaluate_rag(query, hybrid_contexts, hybrid_answer)
         result["hybrid"] = {
             "scores": hybrid_scores,
             "answer": hybrid_answer,
@@ -105,7 +105,7 @@ class RAGEvaluator:
         naive_contexts = self._extract_contexts(naive_results, "naive")
         naive_answer = naive_results.get("response", "")
 
-        naive_scores = evaluate_all(query, naive_contexts, naive_answer)
+        naive_scores = evaluate_rag(query, naive_contexts, naive_answer)
         result["naive"] = {
             "scores": naive_scores,
             "answer": naive_answer,
@@ -144,18 +144,19 @@ class RAGEvaluator:
         print(f"{'='*60}")
 
         all_results = []
-        hybrid_totals = {"context_relevance": 0, "context_precision": 0, "faithfulness": 0, "answer_relevance": 0}
-        naive_totals = {"context_relevance": 0, "context_precision": 0, "faithfulness": 0, "answer_relevance": 0}
+        # RAGAS 메트릭: faithfulness, answer_relevance, context_precision
+        hybrid_totals = {"faithfulness": 0, "answer_relevance": 0, "context_precision": 0}
+        naive_totals = {"faithfulness": 0, "answer_relevance": 0, "context_precision": 0}
 
         for i, query in enumerate(queries):
             print(f"\n[{i+1}/{len(queries)}] {query[:50]}...")
             result = self.evaluate_single(query, top_k=top_k)
             all_results.append(result)
 
-            # 합계 누적
+            # 합계 누적 (메트릭이 있는 경우만)
             for metric in hybrid_totals:
-                hybrid_totals[metric] += result["hybrid"]["scores"][metric]
-                naive_totals[metric] += result["naive"]["scores"][metric]
+                hybrid_totals[metric] += result["hybrid"]["scores"].get(metric, 0)
+                naive_totals[metric] += result["naive"]["scores"].get(metric, 0)
 
         # 평균 계산
         n = len(queries)
@@ -234,7 +235,7 @@ class RAGEvaluator:
         print("VERSION COMPARISON")
         print(f"{'='*60}")
 
-        metrics = ["context_relevance", "context_precision", "faithfulness", "answer_relevance"]
+        metrics = ["faithfulness", "answer_relevance", "context_precision"]
 
         # 헤더
         header = "Metric".ljust(20)
@@ -247,7 +248,8 @@ class RAGEvaluator:
         for metric in metrics:
             row = metric.ljust(20)
             for version, scores in versions.items():
-                row += f"{scores[metric]:.3f}".center(12)
+                score = scores.get(metric, 0)
+                row += f"{score:.3f}".center(12)
             print(row)
 
         return versions
