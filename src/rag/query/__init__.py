@@ -1,6 +1,5 @@
 """RAG Query 모듈 - Hybrid Retriever"""
 
-# TODO: HybridRetriever 구현 후 export
-# from .retriever import HybridRetriever
+from .retriever import HybridRetriever, RetrievalResult
 
-__all__ = []
+__all__ = ["HybridRetriever", "RetrievalResult"]
