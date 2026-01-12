@@ -89,7 +89,7 @@ class ChromaVectorStore:
         엔티티를 컬렉션에 추가
 
         Args:
-            entities: 엔티티 정보 리스트 (name, entity_type, description, source_doc_id, emp_no)
+            entities: 엔티티 정보 리스트 (name, entity_type, description, source_doc_id)
             embeddings: 엔티티 임베딩 벡터 (numpy array)
             doc_type: 문서 타입 (patent/article/project)
         """
@@ -115,7 +115,6 @@ class ChromaVectorStore:
                 "name": entity["name"],
                 "entity_type": entity.get("entity_type", "UNKNOWN"),
                 "source_doc_id": entity.get("source_doc_id", ""),
-                "emp_no": entity.get("emp_no", ""),
                 "doc_type": doc_type
             })
 
@@ -142,7 +141,7 @@ class ChromaVectorStore:
         관계를 컬렉션에 추가
 
         Args:
-            relations: 관계 정보 리스트 (source_entity, target_entity, relation_type, description, source_doc_id, emp_no)
+            relations: 관계 정보 리스트 (source_entity, target_entity, keywords, description, source_doc_id)
             embeddings: 관계 임베딩 벡터
             doc_type: 문서 타입
         """
@@ -175,7 +174,6 @@ class ChromaVectorStore:
                 "target_entity": relation["target_entity"],
                 "keywords": keywords,
                 "source_doc_id": relation.get("source_doc_id", ""),
-                "emp_no": relation.get("emp_no", ""),
                 "doc_type": doc_type
             })
 
@@ -194,8 +192,7 @@ class ChromaVectorStore:
         self,
         query_embedding: Union[List[float], np.ndarray],
         doc_types: List[str] = None,
-        top_k: int = None,
-        filter_emp_no: str = None
+        top_k: int = None
     ) -> List[Dict]:
         """
         엔티티 검색
@@ -204,7 +201,6 @@ class ChromaVectorStore:
             query_embedding: 쿼리 임베딩 벡터
             doc_types: 검색할 문서 타입 리스트 (None이면 전체)
             top_k: 반환할 결과 수
-            filter_emp_no: 특정 교수만 필터링
 
         Returns:
             검색 결과 리스트
@@ -230,16 +226,10 @@ class ChromaVectorStore:
             if collection.count() == 0:
                 continue
 
-            # 필터 조건 구성
-            where_filter = None
-            if filter_emp_no:
-                where_filter = {"emp_no": filter_emp_no}
-
             try:
                 results = collection.query(
                     query_embeddings=[query_embedding],
                     n_results=top_k,
-                    where=where_filter,
                     include=["documents", "metadatas", "distances"]
                 )
 
@@ -270,8 +260,7 @@ class ChromaVectorStore:
         self,
         query_embedding: Union[List[float], np.ndarray],
         doc_types: List[str] = None,
-        top_k: int = None,
-        filter_emp_no: str = None
+        top_k: int = None
     ) -> List[Dict]:
         """
         관계 검색
@@ -280,7 +269,6 @@ class ChromaVectorStore:
             query_embedding: 쿼리 임베딩 벡터
             doc_types: 검색할 문서 타입 리스트
             top_k: 반환할 결과 수
-            filter_emp_no: 특정 교수만 필터링
 
         Returns:
             검색 결과 리스트
@@ -305,15 +293,10 @@ class ChromaVectorStore:
             if collection.count() == 0:
                 continue
 
-            where_filter = None
-            if filter_emp_no:
-                where_filter = {"emp_no": filter_emp_no}
-
             try:
                 results = collection.query(
                     query_embeddings=[query_embedding],
                     n_results=top_k,
-                    where=where_filter,
                     include=["documents", "metadatas", "distances"]
                 )
 
@@ -342,8 +325,7 @@ class ChromaVectorStore:
         self,
         query_embedding: Union[List[float], np.ndarray],
         doc_types: List[str] = None,
-        top_k: int = None,
-        filter_emp_no: str = None
+        top_k: int = None
     ) -> Dict[str, List[Dict]]:
         """
         엔티티와 관계 모두 검색
@@ -352,14 +334,13 @@ class ChromaVectorStore:
             query_embedding: 쿼리 임베딩 벡터
             doc_types: 검색할 문서 타입 리스트
             top_k: 각 타입별 반환할 결과 수
-            filter_emp_no: 특정 교수만 필터링
 
         Returns:
             {"entities": [...], "relations": [...]}
         """
         return {
-            "entities": self.search_entities(query_embedding, doc_types, top_k, filter_emp_no),
-            "relations": self.search_relations(query_embedding, doc_types, top_k, filter_emp_no)
+            "entities": self.search_entities(query_embedding, doc_types, top_k),
+            "relations": self.search_relations(query_embedding, doc_types, top_k)
         }
 
     def get_stats(self) -> Dict[str, int]:
@@ -368,30 +349,6 @@ class ChromaVectorStore:
         for name, collection in self.collections.items():
             stats[name] = collection.count()
         return stats
-
-    def get_emp_no_stats(self, doc_type: str = "patent") -> Dict[str, int]:
-        """
-        교수별 엔티티/관계 수 통계
-
-        Args:
-            doc_type: 문서 타입
-
-        Returns:
-            {emp_no: count} 딕셔너리
-        """
-        entity_collection = self.collections.get(f"{doc_type}_entities")
-        if not entity_collection or entity_collection.count() == 0:
-            return {}
-
-        # 모든 데이터 가져오기 (대용량에서는 pagination 필요)
-        all_data = entity_collection.get(include=["metadatas"])
-
-        emp_counts = {}
-        for metadata in all_data["metadatas"]:
-            emp_no = metadata.get("emp_no", "unknown")
-            emp_counts[emp_no] = emp_counts.get(emp_no, 0) + 1
-
-        return emp_counts
 
     def delete_by_doc_id(self, doc_id: str, doc_type: str = "patent"):
         """
@@ -432,15 +389,13 @@ if __name__ == "__main__":
             "name": "딥러닝",
             "entity_type": "TECHNOLOGY",
             "description": "심층 신경망 기반 기계학습 기술",
-            "source_doc_id": "patent_001",
-            "emp_no": "P12345"
+            "source_doc_id": "patent_001"
         },
         {
             "name": "의료영상분석",
             "entity_type": "DOMAIN",
             "description": "CT, MRI 등 의료 영상 분석 분야",
-            "source_doc_id": "patent_001",
-            "emp_no": "P12345"
+            "source_doc_id": "patent_001"
         }
     ]
 

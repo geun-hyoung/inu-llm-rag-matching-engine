@@ -51,7 +51,6 @@ class GraphStore:
         name: str,
         entity_type: str,
         doc_id: str,
-        emp_no: str,
         description: str = ""
     ):
         """
@@ -61,19 +60,16 @@ class GraphStore:
             name: 엔티티 이름
             entity_type: 엔티티 타입
             doc_id: 문서 ID
-            emp_no: 교수 사번
             description: 설명
         """
-        new_source = {"doc_id": doc_id, "emp_no": emp_no}
-
         if self.graph.has_node(name):
             # 기존 노드에 source 추가
             node_data = self.graph.nodes[name]
             sources = node_data.get("sources", [])
 
-            # 중복 체크 (doc_id + emp_no 둘 다 같으면 스킵)
-            if new_source not in sources:
-                sources.append(new_source)
+            # 중복 체크
+            if doc_id not in sources:
+                sources.append(doc_id)
                 self.graph.nodes[name]["sources"] = sources
 
             # description이 비어있으면 업데이트
@@ -85,7 +81,7 @@ class GraphStore:
                 name,
                 entity_type=entity_type,
                 description=description,
-                sources=[new_source]
+                sources=[doc_id]
             )
 
     def add_relation(
@@ -94,7 +90,6 @@ class GraphStore:
         target_entity: str,
         keywords: str,
         doc_id: str,
-        emp_no: str,
         description: str = ""
     ):
         """
@@ -105,19 +100,16 @@ class GraphStore:
             target_entity: 타겟 엔티티
             keywords: 관계 키워드 (LightRAG 스타일)
             doc_id: 문서 ID
-            emp_no: 교수 사번
             description: 설명
         """
-        new_source = {"doc_id": doc_id, "emp_no": emp_no}
-
         if self.graph.has_edge(source_entity, target_entity):
             # 기존 엣지에 source 추가
             edge_data = self.graph.edges[source_entity, target_entity]
             sources = edge_data.get("sources", [])
             keywords_list = edge_data.get("keywords", [])
 
-            if new_source not in sources:
-                sources.append(new_source)
+            if doc_id not in sources:
+                sources.append(doc_id)
                 self.graph.edges[source_entity, target_entity]["sources"] = sources
                 # weight 증가 (관계 빈도)
                 self.graph.edges[source_entity, target_entity]["weight"] = len(sources)
@@ -133,7 +125,7 @@ class GraphStore:
                 target_entity,
                 keywords=[keywords] if keywords else [],
                 description=description,
-                sources=[new_source],
+                sources=[doc_id],
                 weight=1
             )
 
@@ -142,14 +134,13 @@ class GraphStore:
         엔티티 배치 추가
 
         Args:
-            entities: 엔티티 리스트 (name, entity_type, source_doc_id, emp_no, description)
+            entities: 엔티티 리스트 (name, entity_type, source_doc_id, description)
         """
         for entity in entities:
             self.add_entity(
                 name=entity["name"],
                 entity_type=entity.get("entity_type", "UNKNOWN"),
                 doc_id=entity.get("source_doc_id", ""),
-                emp_no=entity.get("emp_no", ""),
                 description=entity.get("description", "")
             )
 
@@ -158,7 +149,7 @@ class GraphStore:
         관계 배치 추가
 
         Args:
-            relations: 관계 리스트 (source_entity, target_entity, keywords, source_doc_id, emp_no)
+            relations: 관계 리스트 (source_entity, target_entity, keywords, source_doc_id)
         """
         for relation in relations:
             self.add_relation(
@@ -166,7 +157,6 @@ class GraphStore:
                 target_entity=relation["target_entity"],
                 keywords=relation.get("keywords", ""),
                 doc_id=relation.get("source_doc_id", ""),
-                emp_no=relation.get("emp_no", ""),
                 description=relation.get("description", "")
             )
 
@@ -217,8 +207,7 @@ class GraphStore:
                 "name": neighbor,
                 "entity_type": node_data.get("entity_type", "UNKNOWN"),
                 "description": node_data.get("description", ""),
-                "sources": node_data.get("sources", []),
-                "emp_nos": list(set(s["emp_no"] for s in node_data.get("sources", [])))
+                "sources": node_data.get("sources", [])
             })
 
         return results
@@ -241,8 +230,7 @@ class GraphStore:
             "name": entity_name,
             "entity_type": node_data.get("entity_type", "UNKNOWN"),
             "description": node_data.get("description", ""),
-            "sources": node_data.get("sources", []),
-            "emp_nos": list(set(s["emp_no"] for s in node_data.get("sources", [])))
+            "sources": node_data.get("sources", [])
         }
 
     def get_relations_between(
@@ -273,27 +261,6 @@ class GraphStore:
             "weight": edge_data.get("weight", 1)
         }
 
-    def get_entities_by_emp_no(self, emp_no: str) -> List[Dict]:
-        """
-        특정 교수의 엔티티 조회
-
-        Args:
-            emp_no: 교수 사번
-
-        Returns:
-            엔티티 리스트
-        """
-        results = []
-        for node, data in self.graph.nodes(data=True):
-            sources = data.get("sources", [])
-            if any(s["emp_no"] == emp_no for s in sources):
-                results.append({
-                    "name": node,
-                    "entity_type": data.get("entity_type", "UNKNOWN"),
-                    "description": data.get("description", "")
-                })
-        return results
-
     def get_subgraph(
         self,
         entity_names: List[str],
@@ -321,16 +288,10 @@ class GraphStore:
 
     def get_stats(self) -> Dict:
         """그래프 통계"""
-        emp_nos = set()
-        for _, data in self.graph.nodes(data=True):
-            for source in data.get("sources", []):
-                emp_nos.add(source["emp_no"])
-
         return {
             "doc_type": self.doc_type,
             "num_nodes": len(self.graph.nodes),
-            "num_edges": len(self.graph.edges),
-            "num_professors": len(emp_nos)
+            "num_edges": len(self.graph.edges)
         }
 
     def save(self):
@@ -362,24 +323,21 @@ if __name__ == "__main__":
         name="딥러닝",
         entity_type="TECHNOLOGY",
         doc_id="patent_001",
-        emp_no="P12345",
         description="심층 신경망 기반 기계학습"
     )
 
-    # 같은 엔티티, 다른 교수
+    # 같은 엔티티, 다른 문서
     store.add_entity(
         name="딥러닝",
         entity_type="TECHNOLOGY",
         doc_id="patent_002",
-        emp_no="P67890",
         description=""
     )
 
     store.add_entity(
         name="의료영상분석",
         entity_type="DOMAIN",
-        doc_id="patent_001",
-        emp_no="P12345"
+        doc_id="patent_001"
     )
 
     # 관계 추가
@@ -387,8 +345,7 @@ if __name__ == "__main__":
         source_entity="딥러닝",
         target_entity="의료영상분석",
         keywords="image processing, diagnosis, AI application",
-        doc_id="patent_001",
-        emp_no="P12345"
+        doc_id="patent_001"
     )
 
     # 통계 확인
@@ -398,7 +355,6 @@ if __name__ == "__main__":
     entity = store.get_entity("딥러닝")
     print(f"\n딥러닝 엔티티:")
     print(f"  - sources: {entity['sources']}")
-    print(f"  - emp_nos: {entity['emp_nos']}")
 
     # 1-hop 이웃 조회
     neighbors = store.get_neighbors("딥러닝")
