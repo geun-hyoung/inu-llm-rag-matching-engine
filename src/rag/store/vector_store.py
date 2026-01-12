@@ -9,7 +9,7 @@ from typing import List, Dict, Optional, Union
 from dataclasses import asdict
 import numpy as np
 
-sys.path.append(str(Path(__file__).parent.parent.parent))
+sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 from config.settings import RAG_STORE_DIR, TOP_K_RESULTS, SIMILARITY_THRESHOLD
 
 try:

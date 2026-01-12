@@ -10,7 +10,7 @@ from typing import List, Dict, Set, Optional
 
 import networkx as nx
 
-sys.path.append(str(Path(__file__).parent.parent.parent))
+sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 from config.settings import RAG_STORE_DIR
 
 

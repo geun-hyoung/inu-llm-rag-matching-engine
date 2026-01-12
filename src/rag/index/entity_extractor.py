@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 from openai import OpenAI
 
-sys.path.append(str(Path(__file__).parent.parent.parent))
+sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 from config.settings import OPENAI_API_KEY, LLM_MODEL
 from src.rag.prompts import (
     TUPLE_DELIMITER,

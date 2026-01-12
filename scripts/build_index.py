@@ -25,11 +25,11 @@ from config.settings import (
     PATENT_DATA_FILE,
     ARTICLE_DATA_FILE
 )
-from src.preprocessing.text_processor import TextProcessor
-from src.rag.entity_extractor import EntityRelationExtractor
-from src.rag.vector_store import ChromaVectorStore
-from src.rag.graph_store import GraphStore
-from src.embedding.encoder import Embedder
+from src.rag.preprocessing.text_processor import TextProcessor
+from src.rag.index.entity_extractor import EntityRelationExtractor
+from src.rag.store.vector_store import ChromaVectorStore
+from src.rag.store.graph_store import GraphStore
+from src.rag.embedding.embedder import Embedder
 
 
 # 로깅 설정

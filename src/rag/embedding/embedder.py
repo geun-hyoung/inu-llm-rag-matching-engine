@@ -1,5 +1,5 @@
 """
-Embedding Model
+Embedder
 임베딩 모델 구현 - Qwen3 (GPU) / OpenAI (API) 자동 전환
 """
 
@@ -8,7 +8,7 @@ import numpy as np
 import sys
 from pathlib import Path
 
-sys.path.append(str(Path(__file__).parent.parent.parent))
+sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 from config.settings import (
     QWEN_EMBEDDING_MODEL, QWEN_EMBEDDING_DIM,
     OPENAI_EMBEDDING_MODEL, OPENAI_EMBEDDING_DIM,
@@ -16,7 +16,7 @@ from config.settings import (
 )
 
 
-class EmbeddingModel:
+class Embedder:
     """임베딩 모델 클래스 - GPU/API 자동 전환"""
 
     def __init__(self, force_api: bool = False):
@@ -148,11 +148,11 @@ class EmbeddingModel:
 
 if __name__ == "__main__":
     # 테스트
-    model = EmbeddingModel()
-    print(f"Model: {model.model_name}")
-    print(f"Dimension: {model.dimension}")
+    embedder = Embedder()
+    print(f"Model: {embedder.model_name}")
+    print(f"Dimension: {embedder.dimension}")
 
     # 샘플 텍스트 임베딩
     test_texts = ["딥러닝 기반 의료영상 분석", "자연어 처리 연구"]
-    embeddings = model.encode(test_texts)
+    embeddings = embedder.encode(test_texts)
     print(f"Embeddings shape: {embeddings.shape}")
