@@ -36,7 +36,7 @@ class HybridRetriever:
     def __init__(
         self,
         doc_types: List[str] = None,
-        force_api: bool = True
+        force_api: bool = False
     ):
         """
         Hybrid 검색기 초기화

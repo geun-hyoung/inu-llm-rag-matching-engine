@@ -27,6 +27,7 @@ def format_result(result: dict, verbose: bool = False) -> str:
 
     # 결과 요약
     output.append(f"\n--- Results Summary ---")
+    output.append(f"{result}")
     output.append(f"Local results: {len(result['local_results'])}")
     output.append(f"Global results: {len(result['global_results'])}")
     output.append(f"Merged results: {len(result['merged_results'])}")
