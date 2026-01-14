@@ -352,6 +352,7 @@ with sync_playwright() as p:
                 current_processed = len(results) - start_idx
                 if current_processed > 0 and current_processed % save_interval == 0:
                     try:
+                        # data 폴더에 저장
                         with open(output_file, 'w', encoding='utf-8') as f:
                             json.dump(results, f, ensure_ascii=False, indent=2)
                         print(f"  💾 중간 저장 완료 ({len(results)}개 결과 저장됨)")
@@ -404,6 +405,7 @@ with sync_playwright() as p:
                 current_processed = len(results) - start_idx
                 if current_processed > 0 and current_processed % save_interval == 0:
                     try:
+                        # data 폴더에 저장
                         with open(output_file, 'w', encoding='utf-8') as f:
                             json.dump(results, f, ensure_ascii=False, indent=2)
                         print(f"  💾 중간 저장 완료 ({len(results)}개 결과 저장됨)")
@@ -431,6 +433,7 @@ with sync_playwright() as p:
         # 결과 판별 실패는 results에 포함되지 않으므로 저장할 데이터만 있음
         try:
             if results:
+                # data 폴더에 저장
                 with open(output_file, 'w', encoding='utf-8') as f:
                     json.dump(results, f, ensure_ascii=False, indent=2)
                 print(f"\n✅ 최종 결과를 '{output_file}' 파일로 저장했습니다. (총 {len(results)}개)")
