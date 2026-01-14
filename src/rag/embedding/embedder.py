@@ -91,14 +91,21 @@ class Embedder:
 
         Returns:
             임베딩 벡터 (numpy array)
+            - 단일 텍스트: 1차원 (dim,)
+            - 리스트: 2차원 (n, dim)
         """
-        if isinstance(texts, str):
+        single_input = isinstance(texts, str)
+        if single_input:
             texts = [texts]
 
         if self.use_gpu:
-            return self._encode_qwen(texts)
+            embeddings = self._encode_qwen(texts)
         else:
-            return self._encode_openai(texts)
+            embeddings = self._encode_openai(texts)
+
+        if single_input:
+            return embeddings[0]
+        return embeddings
 
     def _encode_qwen(self, texts: List[str]) -> np.ndarray:
         """Qwen3로 임베딩 생성"""
