@@ -174,44 +174,68 @@ Output:
 
 
 # ============================================================
-# Query Time: 키워드 추출 프롬프트 (LightRAG 공식)
+# Query Time: 키워드 추출 프롬프트 (산학협력 매칭용)
 # ============================================================
 KEYWORD_EXTRACTION_PROMPT = """---Role---
-You are a helpful assistant tasked with identifying both high-level and low-level keywords in the user's query.
+산학협력 매칭 시스템의 검색 키워드 추출기입니다.
+사용자 쿼리에서 연구자료 검색을 위한 키워드를 추출합니다.
 
 ---Goal---
-Given the query, list both high-level and low-level keywords. High-level keywords focus on overarching concepts or themes, while low-level keywords focus on specific entities, details, or concrete terms.
+쿼리에서 두 가지 유형의 키워드를 추출합니다:
+
+1. low_level_keywords (엔티티 검색용)
+   - 구체적인 연구 대상, 기술, 방법론, 문제
+   - 예: 알고리즘명, 소재명, 시스템명, 기술명
+   - Local Search에서 개별 엔티티를 직접 찾는 데 사용
+
+2. high_level_keywords (관계 검색용)
+   - 엔티티 간의 관계나 연결을 나타내는 표현
+   - "A로 B를 해결", "A를 통한 B 향상", "A 기반 B 개발" 형태
+   - Global Search에서 엔티티 간 관계를 찾는 데 사용
 
 ---Instructions---
-- Output the keywords in JSON format.
-- The JSON should have two keys:
-  - "high_level_keywords" for overarching concepts or themes
-  - "low_level_keywords" for specific entities or details
-- Output must be in Korean.
+- JSON 형식으로 출력
+- 모든 키워드는 한국어로 작성
+- low_level: 명사/명사구 형태 (3-5개)
+- high_level: 관계 표현 형태 (2-3개)
 
 ######################
 -Examples-
 ######################
 Example 1:
 
-Query: "딥러닝을 활용한 의료영상 진단 전문가를 찾아줘"
+Query: "머신러닝 기반 금융 사기 탐지 연구"
 ################
 Output:
-{{"high_level_keywords": ["의료영상 진단", "인공지능 의료", "영상 분석 연구"], "low_level_keywords": ["딥러닝", "CNN", "CT", "MRI", "영상처리"]}}
+{{"low_level_keywords": ["머신러닝", "금융 사기 탐지", "XGBoost", "Random Forest", "이상탐지"], "high_level_keywords": ["머신러닝으로 사기 탐지", "불균형 데이터 처리를 통한 정확도 향상"]}}
 #############################
 Example 2:
 
-Query: "자연어처리 분야에서 BERT 모델 연구하는 교수님"
+Query: "딥러닝을 활용한 의료영상 진단 기술"
 ################
 Output:
-{{"high_level_keywords": ["자연어처리 연구", "언어 모델", "텍스트 분석"], "low_level_keywords": ["BERT", "전이학습", "트랜스포머", "언어모델"]}}
+{{"low_level_keywords": ["딥러닝", "의료영상", "CNN", "CT 영상", "MRI"], "high_level_keywords": ["딥러닝 기반 영상 분석", "자동 진단을 통한 정확도 향상"]}}
 #############################
 Example 3:
 
-Query: "배터리 소재 개발 관련 연구자"
+Query: "배터리 수명 향상을 위한 양극재 연구"
 ################
 Output:
-{{"high_level_keywords": ["에너지 저장", "소재 연구", "전기화학"], "low_level_keywords": ["리튬이온", "양극재", "음극재", "전해질", "배터리"]}}
+{{"low_level_keywords": ["양극재", "리튬이온 배터리", "표면 코팅", "도핑"], "high_level_keywords": ["코팅 기술로 안정성 향상", "양극재 열화 문제 해결"]}}
+#############################
+Example 4:
+
+Query: "PFAS 오염물질 처리 기술"
+################
+Output:
+{{"low_level_keywords": ["PFAS", "PFOA", "PFOS", "나노소재", "흡착"], "high_level_keywords": ["나노소재 기반 오염물질 제거", "고효율 흡착을 통한 정화"]}}
+#############################
+Example 5:
+
+Query: "IoT 센서 네트워크 스케줄링 연구"
+################
+Output:
+{{"low_level_keywords": ["IoT", "센서 네트워크", "강화학습", "스케줄링"], "high_level_keywords": ["강화학습 기반 동적 스케줄링", "엣지 컴퓨팅을 통한 효율화"]}}
 #############################
 -Real Data-
 ######################

@@ -14,14 +14,25 @@ from src.evaluation.evaluator import RAGEvaluator
 
 
 def load_test_queries(query_file: str = None) -> list:
-    """테스트 쿼리 로드"""
+    """테스트 쿼리 로드 (reference 포함)"""
     if query_file is None:
         query_file = Path(__file__).parent.parent / "src" / "evaluation" / "test_queries.json"
 
     with open(query_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
 
-    return [q["query"] for q in data["queries"]]
+    # reference가 있는 경우 함께 반환
+    queries = []
+    for q in data["queries"]:
+        query_item = {
+            "query": q["query"],
+            "reference": q.get("reference"),
+            "source_doc_ids": q.get("source_doc_ids", []),
+            "category": q.get("category", "")
+        }
+        queries.append(query_item)
+
+    return queries
 
 
 def main():

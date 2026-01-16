@@ -76,7 +76,14 @@ class IndexBuilder:
             if self.doc_type == "patent":
                 file_path = PATENT_DATA_FILE
             elif self.doc_type == "article":
-                file_path = ARTICLE_DATA_FILE
+                # article_sample.json 파일이 있으면 그것을 사용, 없으면 기본 파일 사용
+                sample_file = "data/article/article_sample.json"
+                if Path(sample_file).exists():
+                    file_path = sample_file
+                    logger.info(f"Using article sample file: {sample_file}")
+                else:
+                    file_path = ARTICLE_DATA_FILE
+                    logger.info(f"Sample file not found. Using full article data: {file_path}")
             elif self.doc_type == "project":
                 file_path = PROJECT_DATA_FILE
             else:

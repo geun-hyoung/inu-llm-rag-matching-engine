@@ -25,14 +25,14 @@ class NaiveRetriever:
     def __init__(
         self,
         doc_types: List[str] = None,
-        force_api: bool = True
+        force_api: bool = False
     ):
         """
         Naive 검색기 초기화
 
         Args:
             doc_types: 검색할 문서 타입 리스트 (기본: patent, article, project)
-            force_api: OpenAI API 강제 사용 여부
+            force_api: OpenAI API 강제 사용 여부 (기본: False, Qwen3 사용)
         """
         self.doc_types = doc_types or ["patent", "article", "project"]
 
@@ -40,7 +40,7 @@ class NaiveRetriever:
         self.llm_client = OpenAI(api_key=OPENAI_API_KEY)
         self.llm_model = LLM_MODEL
 
-        # 임베딩 모델
+        # 임베딩 모델 (기본적으로 Qwen3 사용)
         self.embedder = Embedder(force_api=force_api)
 
         # 벡터 저장소
