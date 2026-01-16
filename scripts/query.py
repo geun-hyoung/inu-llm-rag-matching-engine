@@ -7,10 +7,136 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from datetime import datetime
 
 sys.path.append(str(Path(__file__).parent.parent))
 
 from src.rag.query.retriever import HybridRetriever
+from config.settings import RESULTS_DIR
+
+
+def load_article_data():
+    """원본 논문 데이터 로드"""
+    try:
+        with open('data/article/article_sample.json', 'r', encoding='utf-8') as f:
+            articles = json.load(f)
+        # doc_id를 키로 하는 딕셔너리로 변환
+        article_dict = {}
+        for article in articles:
+            doc_id = article.get('no')
+            if doc_id:
+                article_dict[str(doc_id)] = article
+        return article_dict
+    except Exception as e:
+        print(f"Warning: Could not load article data: {e}")
+        return {}
+
+
+def save_query_result(result: dict, article_data: dict, output_dir: str = None):
+    """검색 결과를 JSON 파일로 저장 (LightRAG 단계별 정보 + 원본 데이터)"""
+    if output_dir is None:
+        output_dir = Path(RESULTS_DIR) / "experiments"
+
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # 파일명 생성
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"query_result_{timestamp}.json"
+    filepath = output_dir / filename
+
+    # Top 5 결과에서 doc_id 추출
+    doc_ids = set()
+    for r in result['merged_results'][:5]:
+        doc_id = r.get('metadata', {}).get('source_doc_id')
+        if doc_id:
+            doc_ids.add(str(doc_id))
+
+    # 원본 논문 데이터 추가
+    source_papers = {}
+    for doc_id in doc_ids:
+        if doc_id in article_data:
+            paper = article_data[doc_id]
+            source_papers[doc_id] = {
+                "title": paper.get('THSS_NM', 'N/A'),
+                "year": paper.get('YY', 'N/A'),
+                "abstract": paper.get('abstract', 'N/A'),
+                "professor": paper.get('professor_info', {}).get('NM', 'N/A'),
+                "department": paper.get('professor_info', {}).get('HG_NM', 'N/A'),
+                "college": paper.get('professor_info', {}).get('COLG_NM', 'N/A')
+            }
+
+    # JSON 구조 생성
+    output = {
+        "query_info": {
+            "query": result['query'],
+            "mode": result['mode'],
+            "timestamp": datetime.now().isoformat()
+        },
+        "lightrag_process": {
+            "step1_keyword_extraction": {
+                "high_level_keywords": result['high_level_keywords'],
+                "low_level_keywords": result['low_level_keywords']
+            },
+            "step2_local_search": {
+                "count": len(result['local_results']),
+                "results": [
+                    {
+                        "name": r.get('metadata', {}).get('name', 'N/A'),
+                        "entity_type": r.get('metadata', {}).get('entity_type', 'N/A'),
+                        "similarity": r.get('similarity', 0),
+                        "source_doc_id": r.get('metadata', {}).get('source_doc_id', 'N/A'),
+                        "neighbors": [
+                            {
+                                "name": n.get('name', 'N/A'),
+                                "entity_type": n.get('entity_type', 'N/A')
+                            } for n in r.get('neighbors', [])
+                        ] if 'neighbors' in r else []
+                    }
+                    for r in result['local_results']
+                ]
+            },
+            "step3_global_search": {
+                "count": len(result['global_results']),
+                "results": [
+                    {
+                        "source_entity": r.get('metadata', {}).get('source_entity', 'N/A'),
+                        "target_entity": r.get('metadata', {}).get('target_entity', 'N/A'),
+                        "keywords": r.get('metadata', {}).get('keywords', 'N/A'),
+                        "similarity": r.get('similarity', 0),
+                        "source_doc_id": r.get('metadata', {}).get('source_doc_id', 'N/A')
+                    }
+                    for r in result['global_results']
+                ]
+            },
+            "step4_merge_and_rank": {
+                "count": len(result['merged_results']),
+                "top_5": [
+                    {
+                        "rank": i + 1,
+                        "search_type": r.get('search_type', 'unknown'),
+                        "similarity": r.get('similarity', 0),
+                        "metadata": r.get('metadata', {}),
+                        "neighbors_1hop": [
+                            {
+                                "name": n.get('name', 'N/A'),
+                                "entity_type": n.get('entity_type', 'N/A')
+                            } for n in r.get('neighbors', [])
+                        ] if 'neighbors' in r else []
+                    }
+                    for i, r in enumerate(result['merged_results'][:5])
+                ]
+            }
+        },
+        "source_papers": source_papers
+    }
+
+    # 파일 저장
+    with open(filepath, 'w', encoding='utf-8') as f:
+        json.dump(output, f, ensure_ascii=False, indent=2)
+
+    print(f"\n✓ Results saved to: {filepath}")
+    return filepath
 
 
 def format_result(result: dict, verbose: bool = False) -> str:
@@ -27,7 +153,6 @@ def format_result(result: dict, verbose: bool = False) -> str:
 
     # 결과 요약
     output.append(f"\n--- Results Summary ---")
-    output.append(f"{result}")
     output.append(f"Local results: {len(result['local_results'])}")
     output.append(f"Global results: {len(result['global_results'])}")
     output.append(f"Merged results: {len(result['merged_results'])}")
@@ -50,7 +175,7 @@ def format_result(result: dict, verbose: bool = False) -> str:
             if verbose and 'neighbors' in r:
                 neighbors = r['neighbors']
                 if neighbors:
-                    output.append(f"   Neighbors: {[n['name'] for n in neighbors[:3]]}")
+                    output.append(f"   1-hop Neighbors: {[n['name'] for n in neighbors[:5]]}")
         else:
             # 관계 결과
             source = metadata.get('source_entity', 'N/A')
@@ -107,6 +232,10 @@ def main():
 
     args = parser.parse_args()
 
+    # 원본 논문 데이터 로드
+    print("Loading article data...")
+    article_data = load_article_data()
+
     # Retriever 초기화
     print("Initializing HybridRetriever...")
     retriever = HybridRetriever(doc_types=args.doc_types)
@@ -118,6 +247,9 @@ def main():
         top_k=args.top_k,
         mode=args.mode
     )
+
+    # 결과를 JSON 파일로 저장
+    save_query_result(results, article_data)
 
     # 결과 출력
     if args.json:
