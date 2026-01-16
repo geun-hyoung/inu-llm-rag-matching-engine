@@ -17,7 +17,6 @@ from src.rag.prompts import (
     TUPLE_DELIMITER,
     RECORD_DELIMITER,
     COMPLETION_DELIMITER,
-    DEFAULT_ENTITY_TYPES,
     format_entity_extraction_prompt,
 )
 
@@ -44,23 +43,16 @@ class Relation:
 class EntityRelationExtractor:
     """LightRAG 스타일 엔티티/관계 추출기"""
 
-    def __init__(self, entity_types: List[str] = None):
-        """
-        추출기 초기화
-
-        Args:
-            entity_types: 추출할 엔티티 타입 리스트
-        """
+    def __init__(self):
+        """추출기 초기화"""
         self.client = OpenAI(api_key=OPENAI_API_KEY)
         self.model = LLM_MODEL
-        self.entity_types = entity_types or DEFAULT_ENTITY_TYPES
 
         print(f"EntityRelationExtractor initialized with model: {self.model}")
-        print(f"Entity types: {self.entity_types}")
 
     def _build_prompt(self, text: str) -> str:
         """프롬프트 생성"""
-        return format_entity_extraction_prompt(text, self.entity_types)
+        return format_entity_extraction_prompt(text)
 
     def _call_llm(self, prompt: str) -> str:
         """GPT API 호출"""

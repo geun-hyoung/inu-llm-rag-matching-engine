@@ -23,7 +23,8 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from config.settings import (
     PATENT_DATA_FILE,
-    ARTICLE_DATA_FILE
+    ARTICLE_DATA_FILE,
+    PROJECT_DATA_FILE
 )
 from src.rag.preprocessing.text_processor import TextProcessor
 from src.rag.index.entity_extractor import EntityRelationExtractor
@@ -76,6 +77,8 @@ class IndexBuilder:
                 file_path = PATENT_DATA_FILE
             elif self.doc_type == "article":
                 file_path = ARTICLE_DATA_FILE
+            elif self.doc_type == "project":
+                file_path = PROJECT_DATA_FILE
             else:
                 raise ValueError(f"Unknown doc_type: {self.doc_type}")
 
@@ -93,8 +96,11 @@ class IndexBuilder:
 
         if self.doc_type == "patent":
             processed = self.text_processor.process_patents(raw_data)
+        elif self.doc_type == "article":
+            processed = self.text_processor.process_articles(raw_data)
+        elif self.doc_type == "project":
+            processed = self.text_processor.process_projects(raw_data)
         else:
-            # TODO: article, project 처리 추가
             raise NotImplementedError(f"{self.doc_type} processing not implemented")
 
         # ProcessedDocument를 dict로 변환
@@ -102,8 +108,6 @@ class IndexBuilder:
             {
                 "doc_id": doc.doc_id,
                 "text": doc.text,
-                "emp_no": doc.emp_no,
-                "professor_name": doc.professor_name,
                 "metadata": doc.metadata
             }
             for doc in processed

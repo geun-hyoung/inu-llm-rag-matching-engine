@@ -5,18 +5,16 @@
 
 import json
 import re
-from typing import List, Dict, Optional
+from typing import List, Dict
 from dataclasses import dataclass
 
 
 @dataclass
 class ProcessedDocument:
     """전처리된 문서 데이터 클래스"""
-    doc_id: str           # 문서 고유 ID (특허: tech_aplct_id)
-    doc_type: str         # 문서 타입 (patent / article)
+    doc_id: str           # 문서 고유 ID (no 필드)
+    doc_type: str         # 문서 타입 (patent / article / project)
     text: str             # 전처리된 텍스트
-    emp_no: str           # 교수 사번
-    professor_name: str   # 교수 이름
     metadata: Dict        # 추가 메타데이터
 
 
@@ -55,9 +53,10 @@ class TextProcessor:
             self.stats["total"] += 1
 
             # 필수 필드 확인
+            doc_id = str(patent.get("no", ""))
+            doc_type = patent.get("data_type", "patent")
             title = patent.get("kipris_application_name", "").strip()
             abstract = patent.get("kipris_abstract", "").strip()
-            doc_id = patent.get("tech_aplct_id", "")
 
             if not abstract:
                 self.stats["skipped_short"] += 1
@@ -81,26 +80,17 @@ class TextProcessor:
             # 텍스트 정제
             text = self._clean_text(text)
 
-            # 교수 정보 추출
-            prof_info = patent.get("professor_info", {})
-            emp_no = prof_info.get("EMP_NO", "")
-            professor_name = prof_info.get("NM", "")
-
             # 메타데이터 구성
             metadata = {
                 "register_status": patent.get("kipris_register_status", ""),
                 "application_date": patent.get("kipris_application_date", ""),
-                "college": prof_info.get("COLG_NM", ""),
-                "department": prof_info.get("HG_NM", ""),
-                "original_title": title
+                "title": title
             }
 
             doc = ProcessedDocument(
                 doc_id=doc_id,
-                doc_type="patent",
+                doc_type=doc_type,
                 text=text,
-                emp_no=emp_no,
-                professor_name=professor_name,
                 metadata=metadata
             )
             processed_docs.append(doc)
@@ -138,21 +128,128 @@ class TextProcessor:
         """처리 통계 반환"""
         return self.stats
 
-    # TODO: 논문 처리 (추후 구현)
-    # def process_articles(self, article_data: List[Dict]) -> List[ProcessedDocument]:
-    #     """
-    #     논문 데이터 전처리
-    #
-    #     처리 로직:
-    #     - [논문명] + [초록] + [키워드] 결합
-    #
-    #     Args:
-    #         article_data: 논문 데이터 리스트
-    #
-    #     Returns:
-    #         ProcessedDocument 리스트
-    #     """
-    #     pass
+    def process_articles(self, article_data: List[Dict]) -> List[ProcessedDocument]:
+        """
+        논문 데이터 전처리
+
+        처리 로직:
+        - [논문명] + [초록] 결합
+        - 100자 이하 초록은 제외
+
+        Args:
+            article_data: 논문 데이터 리스트
+
+        Returns:
+            ProcessedDocument 리스트
+        """
+        self.stats = {"total": 0, "processed": 0, "skipped_empty": 0, "skipped_short": 0}
+        processed_docs = []
+
+        for article in article_data:
+            self.stats["total"] += 1
+
+            # 필수 필드 추출
+            doc_id = str(article.get("no", ""))
+            doc_type = article.get("data_type", "article")
+            title = article.get("THSS_NM", "").strip()
+            abstract = article.get("abstract", "").strip()
+
+            if not abstract:
+                self.stats["skipped_empty"] += 1
+                continue
+
+            # 100자 이하면 제외
+            if len(abstract) <= self.MIN_TEXT_LENGTH:
+                self.stats["skipped_short"] += 1
+                continue
+
+            # 텍스트 구성: [논문명] + [초록]
+            text = f"[논문명] {title}\n[초록] {abstract}"
+            text = self._clean_text(text)
+
+            # 메타데이터 구성
+            metadata = {
+                "title": title
+            }
+
+            doc = ProcessedDocument(
+                doc_id=doc_id,
+                doc_type=doc_type,
+                text=text,
+                metadata=metadata
+            )
+            processed_docs.append(doc)
+            self.stats["processed"] += 1
+
+        return processed_docs
+
+    def process_projects(self, project_data: List[Dict]) -> List[ProcessedDocument]:
+        """
+        연구과제 데이터 전처리
+
+        처리 로직:
+        - [과제명] + [연구목표] + [연구내용] + [기대효과] 결합
+        - 100자 이하면 제외
+
+        Args:
+            project_data: 연구과제 데이터 리스트
+
+        Returns:
+            ProcessedDocument 리스트
+        """
+        self.stats = {"total": 0, "processed": 0, "skipped_empty": 0, "skipped_short": 0}
+        processed_docs = []
+
+        for project in project_data:
+            self.stats["total"] += 1
+
+            # 필수 필드 추출
+            doc_id = str(project.get("no", ""))
+            doc_type = project.get("data_type", "project")
+            title = project.get("excel_project_name_kr", "").strip()
+
+            # 연구 내용 필드들
+            objective = project.get("excel_research_objective_summary", "").strip()
+            content = project.get("excel_research_content_summary", "").strip()
+            effect = project.get("excel_expected_effect_summary", "").strip()
+
+            # 내용이 모두 비어있으면 스킵
+            if not objective and not content and not effect:
+                self.stats["skipped_empty"] += 1
+                continue
+
+            # 텍스트 구성
+            text_parts = [f"[과제명] {title}"]
+            if objective:
+                text_parts.append(f"[연구목표] {objective}")
+            if content:
+                text_parts.append(f"[연구내용] {content}")
+            if effect:
+                text_parts.append(f"[기대효과] {effect}")
+
+            text = "\n".join(text_parts)
+            text = self._clean_text(text)
+
+            # 100자 이하면 제외
+            if len(text) <= self.MIN_TEXT_LENGTH:
+                self.stats["skipped_short"] += 1
+                continue
+
+            # 메타데이터 구성
+            metadata = {
+                "title": title
+            }
+
+            doc = ProcessedDocument(
+                doc_id=doc_id,
+                doc_type=doc_type,
+                text=text,
+                metadata=metadata
+            )
+            processed_docs.append(doc)
+            self.stats["processed"] += 1
+
+        return processed_docs
 
 
 def load_patent_data(file_path: str) -> List[Dict]:
