@@ -66,7 +66,7 @@ def save_query_result(result: dict, article_data: dict, output_dir: str = None):
                 "college": paper.get('professor_info', {}).get('COLG_NM', 'N/A')
             }
 
-    # JSON 구조 생성
+    # JSON 구조 생성 (PDF 문서의 Query Time 단계에 맞춤)
     output = {
         "query_info": {
             "query": result['query'],
@@ -74,54 +74,86 @@ def save_query_result(result: dict, article_data: dict, output_dir: str = None):
             "timestamp": datetime.now().isoformat()
         },
         "lightrag_process": {
+            # Step 1: Keyword Extraction (LLM)
             "step1_keyword_extraction": {
+                "description": "LLM을 통해 쿼리에서 Low-level/High-level 키워드 추출",
                 "high_level_keywords": result['high_level_keywords'],
                 "low_level_keywords": result['low_level_keywords']
             },
-            "step2_local_search": {
-                "count": len(result['local_results']),
-                "results": [
-                    {
-                        "name": r.get('metadata', {}).get('name', 'N/A'),
-                        "entity_type": r.get('metadata', {}).get('entity_type', 'N/A'),
-                        "similarity": r.get('similarity', 0),
-                        "source_doc_id": r.get('metadata', {}).get('source_doc_id', 'N/A'),
-                        "neighbors": [
-                            {
-                                "name": n.get('name', 'N/A'),
-                                "entity_type": n.get('entity_type', 'N/A')
-                            } for n in r.get('neighbors', [])
-                        ] if 'neighbors' in r else []
-                    }
-                    for r in result['local_results']
-                ]
+            # Step 2: Dual-level Retrieval (Vector DB)
+            "step2_dual_level_retrieval": {
+                "description": "Vector DB에서 Entity/Relation 유사도 검색",
+                "low_level_retrieval": {
+                    "description": "Low-level keywords → Entity name과 유사도 비교",
+                    "count": len(result['local_results']),
+                    "results": [
+                        {
+                            "name": r.get('metadata', {}).get('name', 'N/A'),
+                            "entity_type": r.get('metadata', {}).get('entity_type', 'N/A'),
+                            "similarity": r.get('similarity', 0),
+                            "source_doc_id": r.get('metadata', {}).get('source_doc_id', 'N/A')
+                        }
+                        for r in result['local_results']
+                    ]
+                },
+                "high_level_retrieval": {
+                    "description": "High-level keywords → Relation keywords와 유사도 비교",
+                    "count": len(result['global_results']),
+                    "results": [
+                        {
+                            "source_entity": r.get('metadata', {}).get('source_entity', 'N/A'),
+                            "target_entity": r.get('metadata', {}).get('target_entity', 'N/A'),
+                            "keywords": r.get('metadata', {}).get('keywords', 'N/A'),
+                            "similarity": r.get('similarity', 0),
+                            "source_doc_id": r.get('metadata', {}).get('source_doc_id', 'N/A')
+                        }
+                        for r in result['global_results']
+                    ]
+                }
             },
-            "step3_global_search": {
-                "count": len(result['global_results']),
-                "results": [
-                    {
-                        "source_entity": r.get('metadata', {}).get('source_entity', 'N/A'),
-                        "target_entity": r.get('metadata', {}).get('target_entity', 'N/A'),
-                        "keywords": r.get('metadata', {}).get('keywords', 'N/A'),
-                        "similarity": r.get('similarity', 0),
-                        "source_doc_id": r.get('metadata', {}).get('source_doc_id', 'N/A'),
-                        "source_entity_info": {
-                            "name": r.get('source_entity_info', {}).get('name', 'N/A'),
-                            "entity_type": r.get('source_entity_info', {}).get('entity_type', 'N/A'),
-                            "description": r.get('source_entity_info', {}).get('description', 'N/A')
-                        } if r.get('source_entity_info') else None,
-                        "target_entity_info": {
-                            "name": r.get('target_entity_info', {}).get('name', 'N/A'),
-                            "entity_type": r.get('target_entity_info', {}).get('entity_type', 'N/A'),
-                            "description": r.get('target_entity_info', {}).get('description', 'N/A')
-                        } if r.get('target_entity_info') else None
-                    }
-                    for r in result['global_results']
-                ]
+            # Step 3: Graph Traversal (Graph DB) - 1-hop 확장
+            "step3_graph_traversal": {
+                "description": "Graph DB에서 1-hop 탐색하여 연결된 정보 수집",
+                "low_level_1hop": {
+                    "description": "Entity top-k → 연결된 Edge들 수집",
+                    "results": [
+                        {
+                            "entity_name": r.get('metadata', {}).get('name', 'N/A'),
+                            "connected_edges": [
+                                {
+                                    "name": n.get('name', 'N/A'),
+                                    "entity_type": n.get('entity_type', 'N/A')
+                                } for n in r.get('neighbors', [])
+                            ]
+                        }
+                        for r in result['local_results'] if r.get('neighbors')
+                    ]
+                },
+                "high_level_1hop": {
+                    "description": "Relation top-k → src/tgt Node 정보 수집",
+                    "results": [
+                        {
+                            "relation": f"{r.get('metadata', {}).get('source_entity', 'N/A')} → {r.get('metadata', {}).get('target_entity', 'N/A')}",
+                            "source_entity_info": {
+                                "name": r.get('source_entity_info', {}).get('name', 'N/A'),
+                                "entity_type": r.get('source_entity_info', {}).get('entity_type', 'N/A'),
+                                "description": r.get('source_entity_info', {}).get('description', 'N/A')
+                            } if r.get('source_entity_info') else None,
+                            "target_entity_info": {
+                                "name": r.get('target_entity_info', {}).get('name', 'N/A'),
+                                "entity_type": r.get('target_entity_info', {}).get('entity_type', 'N/A'),
+                                "description": r.get('target_entity_info', {}).get('description', 'N/A')
+                            } if r.get('target_entity_info') else None
+                        }
+                        for r in result['global_results']
+                    ]
+                }
             },
-            "step4_merge_and_rank": {
-                "count": len(result['merged_results']),
-                "top_5": [
+            # Step 4: Ranking & Token Truncation
+            "step4_ranking_and_truncation": {
+                "description": "degree/weight 기반 정렬 후 상위 결과 선정",
+                "total_count": len(result['merged_results']),
+                "top_results": [
                     {
                         "rank": i + 1,
                         "search_type": r.get('search_type', 'unknown'),
@@ -132,7 +164,12 @@ def save_query_result(result: dict, article_data: dict, output_dir: str = None):
                                 "name": n.get('name', 'N/A'),
                                 "entity_type": n.get('entity_type', 'N/A')
                             } for n in r.get('neighbors', [])
-                        ] if 'neighbors' in r else []
+                        ] if r.get('neighbors') else (
+                            [
+                                {"source_entity_info": r.get('source_entity_info')},
+                                {"target_entity_info": r.get('target_entity_info')}
+                            ] if r.get('search_type') == 'global' and (r.get('source_entity_info') or r.get('target_entity_info')) else []
+                        )
                     }
                     for i, r in enumerate(result['merged_results'][:5])
                 ]
