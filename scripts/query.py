@@ -104,7 +104,17 @@ def save_query_result(result: dict, article_data: dict, output_dir: str = None):
                         "target_entity": r.get('metadata', {}).get('target_entity', 'N/A'),
                         "keywords": r.get('metadata', {}).get('keywords', 'N/A'),
                         "similarity": r.get('similarity', 0),
-                        "source_doc_id": r.get('metadata', {}).get('source_doc_id', 'N/A')
+                        "source_doc_id": r.get('metadata', {}).get('source_doc_id', 'N/A'),
+                        "source_entity_info": {
+                            "name": r.get('source_entity_info', {}).get('name', 'N/A'),
+                            "entity_type": r.get('source_entity_info', {}).get('entity_type', 'N/A'),
+                            "description": r.get('source_entity_info', {}).get('description', 'N/A')
+                        } if r.get('source_entity_info') else None,
+                        "target_entity_info": {
+                            "name": r.get('target_entity_info', {}).get('name', 'N/A'),
+                            "entity_type": r.get('target_entity_info', {}).get('entity_type', 'N/A'),
+                            "description": r.get('target_entity_info', {}).get('description', 'N/A')
+                        } if r.get('target_entity_info') else None
                     }
                     for r in result['global_results']
                 ]
