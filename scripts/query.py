@@ -122,7 +122,9 @@ def save_query_result(result: dict, article_data: dict, output_dir: str = None):
                             "connected_edges": [
                                 {
                                     "name": n.get('name', 'N/A'),
-                                    "entity_type": n.get('entity_type', 'N/A')
+                                    "entity_type": n.get('entity_type', 'N/A'),
+                                    "relation_description": n.get('relation_description', ''),
+                                    "relation_keywords": n.get('relation_keywords', [])
                                 } for n in r.get('neighbors', [])
                             ]
                         }
@@ -162,7 +164,9 @@ def save_query_result(result: dict, article_data: dict, output_dir: str = None):
                         "neighbors_1hop": [
                             {
                                 "name": n.get('name', 'N/A'),
-                                "entity_type": n.get('entity_type', 'N/A')
+                                "entity_type": n.get('entity_type', 'N/A'),
+                                "relation_description": n.get('relation_description', ''),
+                                "relation_keywords": n.get('relation_keywords', [])
                             } for n in r.get('neighbors', [])
                         ] if r.get('neighbors') else (
                             [
