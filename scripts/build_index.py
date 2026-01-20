@@ -175,15 +175,15 @@ class IndexBuilder:
         """임베딩 생성 (엔티티, 관계, 청크)"""
         logger.info("Generating embeddings...")
 
-        # 엔티티 임베딩 (description 또는 name 사용)
+        # 엔티티 임베딩 (LightRAG 방식: name + description)
         entity_texts = [
-            e.get("description") or e.get("name", "")
+            f"{e.get('name', '')}\n{e.get('description', '')}"
             for e in entities
         ]
 
-        # 관계 임베딩 (description 또는 source-keywords-target 형식)
+        # 관계 임베딩 (LightRAG 방식: keywords를 맨 앞에 배치)
         relation_texts = [
-            r.get("description") or f"{r['source_entity']} {r.get('keywords', '')} {r['target_entity']}"
+            f"{r.get('keywords', '')}\t{r['source_entity']}\n{r['target_entity']}\n{r.get('description', '')}"
             for r in relations
         ]
 

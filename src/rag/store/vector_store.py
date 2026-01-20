@@ -115,7 +115,8 @@ class ChromaVectorStore:
             entity_id = entity_id.replace(" ", "_")[:100]  # 길이 제한
 
             ids.append(entity_id)
-            documents.append(entity.get("description", entity["name"]))
+            # LightRAG 방식: name + description
+            documents.append(f"{entity['name']}\n{entity.get('description', '')}")
             metadatas.append({
                 "name": entity["name"],
                 "entity_type": entity.get("entity_type", "UNKNOWN"),
@@ -167,11 +168,10 @@ class ChromaVectorStore:
 
             ids.append(rel_id)
 
-            # 관계 설명 텍스트 (임베딩 대상) - keywords 포함
-            rel_text = relation.get("description", "")
+            # LightRAG 방식: keywords를 맨 앞에 배치
             keywords = relation.get("keywords", "")
-            if not rel_text:
-                rel_text = f"{relation['source_entity']} {keywords} {relation['target_entity']}"
+            description = relation.get("description", "")
+            rel_text = f"{keywords}\t{relation['source_entity']}\n{relation['target_entity']}\n{description}"
             documents.append(rel_text)
 
             metadatas.append({
