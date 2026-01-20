@@ -184,13 +184,20 @@ class HybridRetriever:
             source_entity = relation["metadata"].get("source_entity", "")
             target_entity = relation["metadata"].get("target_entity", "")
 
-            # 그래프에서 엔티티 정보 조회
+            # 그래프에서 엔티티 정보 및 관계 정보 조회
             doc_type = relation.get("doc_type", "patent")
             if doc_type in self.graph_stores:
-                source_info = self.graph_stores[doc_type].get_entity(source_entity)
-                target_info = self.graph_stores[doc_type].get_entity(target_entity)
+                graph_store = self.graph_stores[doc_type]
+                source_info = graph_store.get_entity(source_entity)
+                target_info = graph_store.get_entity(target_entity)
                 relation["source_entity_info"] = source_info
                 relation["target_entity_info"] = target_info
+
+                # 그래프에서 관계의 전체 정보 조회 (description, keywords 포함)
+                graph_relation = graph_store.get_relations_between(source_entity, target_entity)
+                if graph_relation:
+                    relation["relation_description"] = graph_relation.get("description", "")
+                    relation["relation_keywords"] = graph_relation.get("keywords", [])
 
             relation["search_type"] = "global"
             results.append(relation)

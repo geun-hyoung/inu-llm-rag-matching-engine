@@ -167,7 +167,7 @@ class GraphStore:
         hop: int = 1
     ) -> List[Dict]:
         """
-        엔티티의 이웃 노드 조회 (1-hop 확장)
+        엔티티의 이웃 노드 조회 (1-hop 확장) - 관계 정보 포함
 
         Args:
             entity_name: 엔티티 이름
@@ -175,7 +175,7 @@ class GraphStore:
             hop: 홉 수 (기본 1)
 
         Returns:
-            이웃 엔티티 정보 리스트
+            이웃 엔티티 정보 리스트 (관계 description, keywords 포함)
         """
         if not self.graph.has_node(entity_name):
             return []
@@ -196,18 +196,28 @@ class GraphStore:
             neighbors.update(next_nodes)
             current_nodes = next_nodes
 
-        # 결과 구성
+        # 결과 구성 (관계 정보 포함)
         results = []
         for neighbor in neighbors:
             if neighbor == entity_name:
                 continue
 
             node_data = self.graph.nodes[neighbor]
+
+            # 엣지(관계) 정보 조회 - 양방향 확인
+            edge_data = None
+            if self.graph.has_edge(entity_name, neighbor):
+                edge_data = self.graph.edges[entity_name, neighbor]
+            elif self.graph.has_edge(neighbor, entity_name):
+                edge_data = self.graph.edges[neighbor, entity_name]
+
             results.append({
                 "name": neighbor,
                 "entity_type": node_data.get("entity_type", "UNKNOWN"),
                 "description": node_data.get("description", ""),
-                "sources": node_data.get("sources", [])
+                "sources": node_data.get("sources", []),
+                "relation_description": edge_data.get("description", "") if edge_data else "",
+                "relation_keywords": edge_data.get("keywords", []) if edge_data else []
             })
 
         return results
