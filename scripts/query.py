@@ -371,10 +371,16 @@ def main():
         help="검색 모드 (기본: hybrid)"
     )
     parser.add_argument(
-        "--top-k",
+        "--retrieval-top-k",
         type=int,
-        default=5,
-        help="반환할 결과 수 (기본: 5)"
+        default=None,
+        help="Local/Global 검색 시 각각 가져올 개수 (기본: settings.RETRIEVAL_TOP_K=10)"
+    )
+    parser.add_argument(
+        "--final-top-k",
+        type=int,
+        default=None,
+        help="최종 병합 후 반환할 개수 (기본: settings.FINAL_TOP_K=5)"
     )
     parser.add_argument(
         "--doc-types",
@@ -409,7 +415,8 @@ def main():
     print(f"\nSearching: '{args.query}'")
     results = retriever.retrieve(
         query=args.query,
-        top_k=args.top_k,
+        retrieval_top_k=args.retrieval_top_k,
+        final_top_k=args.final_top_k,
         mode=args.mode
     )
 

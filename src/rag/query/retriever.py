@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from openai import OpenAI
 
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
-from config.settings import OPENAI_API_KEY, LLM_MODEL, TOP_K_RESULTS
+from config.settings import OPENAI_API_KEY, LLM_MODEL, RETRIEVAL_TOP_K, FINAL_TOP_K
 from src.rag.prompts import format_keyword_extraction_prompt, RAG_RESPONSE_PROMPT
 from src.rag.embedding.embedder import Embedder
 from src.rag.store.vector_store import ChromaVectorStore
@@ -247,7 +247,8 @@ class HybridRetriever:
     def retrieve(
         self,
         query: str,
-        top_k: int = None,
+        retrieval_top_k: int = None,
+        final_top_k: int = None,
         mode: str = "hybrid"
     ) -> Dict:
         """
@@ -255,34 +256,36 @@ class HybridRetriever:
 
         Args:
             query: 사용자 쿼리
-            top_k: 반환할 결과 수 (기본: settings.TOP_K_RESULTS)
+            retrieval_top_k: Local/Global 검색 시 각각 가져올 개수 (기본: RETRIEVAL_TOP_K)
+            final_top_k: 최종 병합 후 반환할 개수 (기본: FINAL_TOP_K)
             mode: 검색 모드 ("hybrid", "local", "global")
 
         Returns:
             검색 결과 딕셔너리
         """
-        top_k = top_k or TOP_K_RESULTS
+        retrieval_top_k = retrieval_top_k or RETRIEVAL_TOP_K
+        final_top_k = final_top_k or FINAL_TOP_K
 
         # 1. 키워드 추출
         high_level_keywords, low_level_keywords = self._extract_keywords(query)
 
-        # 2. 검색 수행
+        # 2. 검색 수행 (retrieval_top_k 사용)
         local_results = []
         global_results = []
 
         if mode in ("hybrid", "local"):
-            local_results = self._local_search(low_level_keywords, top_k=top_k)
+            local_results = self._local_search(low_level_keywords, top_k=retrieval_top_k)
 
         if mode in ("hybrid", "global"):
-            global_results = self._global_search(high_level_keywords, top_k=top_k)
+            global_results = self._global_search(high_level_keywords, top_k=retrieval_top_k)
 
-        # 3. 결과 병합
+        # 3. 결과 병합 (final_top_k 사용)
         if mode == "hybrid":
-            merged_results = self._merge_results(local_results, global_results, top_k)
+            merged_results = self._merge_results(local_results, global_results, final_top_k)
         elif mode == "local":
-            merged_results = local_results[:top_k]
+            merged_results = local_results[:final_top_k]
         else:
-            merged_results = global_results[:top_k]
+            merged_results = global_results[:final_top_k]
 
         return {
             "query": query,
