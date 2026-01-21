@@ -1,6 +1,7 @@
 """
 Retrieval 평가 실행 CLI
 Context Relevance + Noise Rate@K 평가 스크립트
+NaiveRetriever (Vector RAG) vs HybridRetriever (GraphRAG) 비교 지원
 """
 
 import argparse
@@ -8,10 +9,12 @@ import json
 import sys
 from pathlib import Path
 from datetime import datetime
+from typing import Union
 
 sys.path.append(str(Path(__file__).parent.parent))
 
 from src.rag.query.retriever import HybridRetriever
+from src.rag.query.naive_retriever import NaiveRetriever
 from src.evaluation import evaluate_context_relevance, evaluate_noise_rate
 from config.settings import RESULTS_DIR, FINAL_TOP_K
 
@@ -35,12 +38,12 @@ def load_test_queries(query_file: str = None) -> list:
     return queries
 
 
-def extract_docs_from_results(merged_results: list) -> list:
+def extract_docs_from_hybrid_results(merged_results: list) -> list:
     """
-    merged_results에서 평가용 문서 리스트 추출
+    HybridRetriever의 merged_results에서 평가용 문서 리스트 추출
 
     Args:
-        merged_results: retriever의 merged_results
+        merged_results: HybridRetriever의 merged_results
 
     Returns:
         [{"doc_id": str, "content": str, "similarity": float}, ...]
@@ -61,27 +64,65 @@ def extract_docs_from_results(merged_results: list) -> list:
     return docs
 
 
+def extract_docs_from_naive_results(results: list) -> list:
+    """
+    NaiveRetriever의 results에서 평가용 문서 리스트 추출
+
+    Args:
+        results: NaiveRetriever의 results
+
+    Returns:
+        [{"doc_id": str, "content": str, "similarity": float}, ...]
+    """
+    docs = []
+    for r in results:
+        metadata = r.get('metadata', {})
+        # NaiveRetriever는 chunk를 검색하므로 doc_id 사용
+        doc_id = metadata.get('doc_id', '') or metadata.get('source_doc_id', '')
+        content = r.get('document', '')
+        similarity = r.get('similarity', 0)
+
+        if doc_id:
+            docs.append({
+                'doc_id': str(doc_id),
+                'content': content,
+                'similarity': similarity
+            })
+
+    return docs
+
+
 def evaluate_single_query(
-    retriever: HybridRetriever,
+    retriever: Union[HybridRetriever, NaiveRetriever],
     query: str,
-    k: int = 5
+    k: int = 5,
+    retriever_type: str = "hybrid"
 ) -> dict:
     """
     단일 쿼리 평가
 
     Args:
-        retriever: HybridRetriever 인스턴스
+        retriever: HybridRetriever 또는 NaiveRetriever 인스턴스
         query: 평가할 쿼리
         k: Top-K
+        retriever_type: "hybrid" 또는 "naive"
 
     Returns:
         평가 결과 딕셔너리
     """
-    # 검색 실행 (retriever에서 dedup 처리됨)
-    results = retriever.retrieve(query=query, final_top_k=k)
-
-    # merged_results에서 문서 추출
-    top_k_docs = extract_docs_from_results(results['merged_results'])
+    if retriever_type == "hybrid":
+        # HybridRetriever 검색
+        results = retriever.retrieve(query=query, final_top_k=k)
+        top_k_docs = extract_docs_from_hybrid_results(results['merged_results'])
+        keywords = {
+            "high_level": results.get('high_level_keywords', []),
+            "low_level": results.get('low_level_keywords', [])
+        }
+    else:
+        # NaiveRetriever 검색
+        results = retriever.retrieve(query=query, top_k=k)
+        top_k_docs = extract_docs_from_naive_results(results['results'])
+        keywords = None  # NaiveRetriever는 키워드 추출 없음
 
     # contexts 추출 (Context Relevance용)
     contexts = [doc['content'] for doc in top_k_docs if doc['content']]
@@ -92,11 +133,13 @@ def evaluate_single_query(
     # Noise Rate@K 평가
     noise_result = evaluate_noise_rate(query, top_k_docs, k=k)
 
-    return {
+    result = {
         "query": query,
+        "retriever_type": retriever_type,
         "context_relevance": context_relevance,
         "noise_rate": noise_result.noise_rate,
         "noise_judgments": [j.to_dict() for j in noise_result.judgments],
+        "retrieved_count": len(top_k_docs),
         "retrieved_docs": [
             {
                 "doc_id": doc['doc_id'],
@@ -104,12 +147,13 @@ def evaluate_single_query(
                 "content_preview": doc['content'][:200] + "..." if len(doc['content']) > 200 else doc['content']
             }
             for doc in top_k_docs
-        ],
-        "keywords": {
-            "high_level": results.get('high_level_keywords', []),
-            "low_level": results.get('low_level_keywords', [])
-        }
+        ]
     }
+
+    if keywords:
+        result["keywords"] = keywords
+
+    return result
 
 
 def calculate_recall_at_k(retrieved_doc_ids: list, ground_truth_ids: list) -> float:
@@ -138,7 +182,9 @@ def run_batch_evaluation(
     queries: list,
     doc_types: list,
     k: int = 5,
-    save: bool = True
+    save: bool = True,
+    retriever_type: str = "hybrid",
+    compare: bool = False
 ) -> dict:
     """
     배치 평가 실행 (그룹 기반 쿼리 지원)
@@ -148,20 +194,30 @@ def run_batch_evaluation(
         doc_types: 문서 타입
         k: Top-K
         save: 결과 저장 여부
+        retriever_type: "hybrid" 또는 "naive"
+        compare: True면 두 retriever 비교 평가
 
     Returns:
         전체 평가 결과
     """
+    if compare:
+        return run_comparison_evaluation(queries, doc_types, k, save)
+
     print(f"\n{'='*60}")
-    print("Retrieval Evaluation")
+    print(f"Retrieval Evaluation ({retriever_type.upper()})")
     print(f"{'='*60}")
+    print(f"Retriever: {retriever_type}")
     print(f"Doc types: {doc_types}")
     print(f"Top-K: {k}")
     print(f"Query count: {len(queries)}")
 
     # Retriever 초기화
-    print("\nInitializing HybridRetriever...")
-    retriever = HybridRetriever(doc_types=doc_types)
+    if retriever_type == "hybrid":
+        print("\nInitializing HybridRetriever...")
+        retriever = HybridRetriever(doc_types=doc_types)
+    else:
+        print("\nInitializing NaiveRetriever...")
+        retriever = NaiveRetriever(doc_types=doc_types)
 
     # 평가 실행
     all_results = []
@@ -173,7 +229,7 @@ def run_batch_evaluation(
 
         print(f"\n[{i+1}/{len(queries)}] {query_text[:50]}...")
 
-        result = evaluate_single_query(retriever, query_text, k=k)
+        result = evaluate_single_query(retriever, query_text, k=k, retriever_type=retriever_type)
         all_results.append(result)
 
         total_relevance += result['context_relevance']
@@ -191,6 +247,7 @@ def run_batch_evaluation(
     summary = {
         "experiment_info": {
             "timestamp": datetime.now().isoformat(),
+            "retriever_type": retriever_type,
             "doc_types": doc_types,
             "k": k,
             "query_count": n
@@ -204,7 +261,7 @@ def run_batch_evaluation(
 
     # 결과 출력
     print(f"\n{'='*60}")
-    print("EVALUATION SUMMARY")
+    print(f"EVALUATION SUMMARY ({retriever_type.upper()})")
     print(f"{'='*60}")
     print(f"  Avg Context Relevance: {avg_relevance:.3f}")
     print(f"  Avg Noise Rate@{k}: {avg_noise_rate:.2%}")
@@ -214,7 +271,142 @@ def run_batch_evaluation(
         results_dir = Path(RESULTS_DIR) / "experiments"
         results_dir.mkdir(parents=True, exist_ok=True)
 
-        filename = f"eval_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        filename = f"eval_{retriever_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        filepath = results_dir / filename
+
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(summary, f, ensure_ascii=False, indent=2)
+
+        print(f"\nResults saved to: {filepath}")
+
+    return summary
+
+
+def run_comparison_evaluation(
+    queries: list,
+    doc_types: list,
+    k: int = 5,
+    save: bool = True
+) -> dict:
+    """
+    NaiveRetriever vs HybridRetriever 비교 평가 실행
+
+    Args:
+        queries: 쿼리 리스트
+        doc_types: 문서 타입
+        k: Top-K
+        save: 결과 저장 여부
+
+    Returns:
+        비교 평가 결과
+    """
+    print(f"\n{'='*70}")
+    print("COMPARISON: NaiveRetriever (Vector) vs HybridRetriever (Graph)")
+    print(f"{'='*70}")
+    print(f"Doc types: {doc_types}")
+    print(f"Top-K: {k}")
+    print(f"Query count: {len(queries)}")
+
+    # Retriever 초기화
+    print("\nInitializing retrievers...")
+    naive_retriever = NaiveRetriever(doc_types=doc_types)
+    hybrid_retriever = HybridRetriever(doc_types=doc_types)
+
+    # 결과 저장
+    naive_results = []
+    hybrid_results = []
+
+    naive_total_relevance = 0.0
+    naive_total_noise = 0.0
+    hybrid_total_relevance = 0.0
+    hybrid_total_noise = 0.0
+
+    for i, query_info in enumerate(queries):
+        query_text = query_info["query"] if isinstance(query_info, dict) else query_info
+
+        print(f"\n[{i+1}/{len(queries)}] {query_text[:50]}...")
+
+        # NaiveRetriever 평가
+        naive_result = evaluate_single_query(naive_retriever, query_text, k=k, retriever_type="naive")
+        naive_results.append(naive_result)
+        naive_total_relevance += naive_result['context_relevance']
+        naive_total_noise += naive_result['noise_rate']
+
+        # HybridRetriever 평가
+        hybrid_result = evaluate_single_query(hybrid_retriever, query_text, k=k, retriever_type="hybrid")
+        hybrid_results.append(hybrid_result)
+        hybrid_total_relevance += hybrid_result['context_relevance']
+        hybrid_total_noise += hybrid_result['noise_rate']
+
+        # 개별 결과 출력
+        print(f"  [Naive]  Relevance: {naive_result['context_relevance']:.3f}, Noise: {naive_result['noise_rate']:.2%}")
+        print(f"  [Hybrid] Relevance: {hybrid_result['context_relevance']:.3f}, Noise: {hybrid_result['noise_rate']:.2%}")
+
+    # 평균 계산
+    n = len(queries)
+    naive_avg_relevance = naive_total_relevance / n if n > 0 else 0.0
+    naive_avg_noise = naive_total_noise / n if n > 0 else 0.0
+    hybrid_avg_relevance = hybrid_total_relevance / n if n > 0 else 0.0
+    hybrid_avg_noise = hybrid_total_noise / n if n > 0 else 0.0
+
+    # 결과 구조
+    summary = {
+        "experiment_info": {
+            "timestamp": datetime.now().isoformat(),
+            "mode": "comparison",
+            "doc_types": doc_types,
+            "k": k,
+            "query_count": n
+        },
+        "comparison_summary": {
+            "naive_retriever": {
+                "avg_context_relevance": naive_avg_relevance,
+                "avg_noise_rate": naive_avg_noise
+            },
+            "hybrid_retriever": {
+                "avg_context_relevance": hybrid_avg_relevance,
+                "avg_noise_rate": hybrid_avg_noise
+            },
+            "difference": {
+                "context_relevance_diff": hybrid_avg_relevance - naive_avg_relevance,
+                "noise_rate_diff": hybrid_avg_noise - naive_avg_noise
+            }
+        },
+        "naive_results": naive_results,
+        "hybrid_results": hybrid_results
+    }
+
+    # 결과 출력
+    print(f"\n{'='*70}")
+    print("COMPARISON SUMMARY")
+    print(f"{'='*70}")
+    print(f"\n{'Metric':<25} {'Naive (Vector)':<18} {'Hybrid (Graph)':<18} {'Diff':<12}")
+    print("-" * 75)
+    print(f"{'Avg Context Relevance':<25} {naive_avg_relevance:<18.3f} {hybrid_avg_relevance:<18.3f} {hybrid_avg_relevance - naive_avg_relevance:+.3f}")
+    print(f"{'Avg Noise Rate@' + str(k):<25} {naive_avg_noise:<18.2%} {hybrid_avg_noise:<18.2%} {hybrid_avg_noise - naive_avg_noise:+.2%}")
+    print("-" * 75)
+
+    # Winner 판정
+    if hybrid_avg_relevance > naive_avg_relevance:
+        print(f"\n[Context Relevance] Winner: Hybrid (+{hybrid_avg_relevance - naive_avg_relevance:.3f})")
+    elif naive_avg_relevance > hybrid_avg_relevance:
+        print(f"\n[Context Relevance] Winner: Naive (+{naive_avg_relevance - hybrid_avg_relevance:.3f})")
+    else:
+        print(f"\n[Context Relevance] Tie")
+
+    if hybrid_avg_noise < naive_avg_noise:
+        print(f"[Noise Rate] Winner: Hybrid (-{naive_avg_noise - hybrid_avg_noise:.2%})")
+    elif naive_avg_noise < hybrid_avg_noise:
+        print(f"[Noise Rate] Winner: Naive (-{hybrid_avg_noise - naive_avg_noise:.2%})")
+    else:
+        print(f"[Noise Rate] Tie")
+
+    # 결과 저장
+    if save:
+        results_dir = Path(RESULTS_DIR) / "experiments"
+        results_dir.mkdir(parents=True, exist_ok=True)
+
+        filename = f"comparison_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         filepath = results_dir / filename
 
         with open(filepath, 'w', encoding='utf-8') as f:
@@ -227,7 +419,7 @@ def run_batch_evaluation(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Retrieval 평가 - Context Relevance + Noise Rate@K"
+        description="Retrieval 평가 - Context Relevance + Noise Rate@K (Naive vs Hybrid 비교 지원)"
     )
     parser.add_argument(
         "--doc-types",
@@ -256,6 +448,18 @@ def main():
         help="단일 쿼리 테스트"
     )
     parser.add_argument(
+        "--retriever",
+        type=str,
+        default="hybrid",
+        choices=["naive", "hybrid"],
+        help="사용할 Retriever 타입 (기본: hybrid)"
+    )
+    parser.add_argument(
+        "--compare",
+        action="store_true",
+        help="Naive vs Hybrid 비교 평가 실행"
+    )
+    parser.add_argument(
         "--no-save",
         action="store_true",
         help="결과 저장 안함"
@@ -265,30 +469,66 @@ def main():
 
     if args.single_query:
         # 단일 쿼리 평가
-        print(f"\n{'='*60}")
-        print("Single Query Evaluation")
-        print(f"{'='*60}")
-        print(f"Query: {args.single_query}")
+        if args.compare:
+            # 비교 모드: 두 retriever 모두 평가
+            print(f"\n{'='*70}")
+            print("Single Query Comparison")
+            print(f"{'='*70}")
+            print(f"Query: {args.single_query}")
 
-        retriever = HybridRetriever(doc_types=args.doc_types)
-        result = evaluate_single_query(retriever, args.single_query, k=args.top_k)
+            naive_retriever = NaiveRetriever(doc_types=args.doc_types)
+            hybrid_retriever = HybridRetriever(doc_types=args.doc_types)
 
-        print(f"\n--- Results ---")
-        print(f"Context Relevance: {result['context_relevance']:.3f}")
-        print(f"Noise Rate@{args.top_k}: {result['noise_rate']:.2%}")
+            print("\n--- NaiveRetriever (Vector RAG) ---")
+            naive_result = evaluate_single_query(naive_retriever, args.single_query, k=args.top_k, retriever_type="naive")
+            print(f"Context Relevance: {naive_result['context_relevance']:.3f}")
+            print(f"Noise Rate@{args.top_k}: {naive_result['noise_rate']:.2%}")
+            print(f"Retrieved: {naive_result['retrieved_count']} docs")
 
-        print(f"\n--- Retrieved Documents ---")
-        for i, doc in enumerate(result['retrieved_docs']):
-            print(f"\n{i+1}. [doc_id: {doc['doc_id']}] similarity: {doc['similarity']:.4f}")
-            print(f"   {doc['content_preview']}")
+            print("\n--- HybridRetriever (GraphRAG) ---")
+            hybrid_result = evaluate_single_query(hybrid_retriever, args.single_query, k=args.top_k, retriever_type="hybrid")
+            print(f"Context Relevance: {hybrid_result['context_relevance']:.3f}")
+            print(f"Noise Rate@{args.top_k}: {hybrid_result['noise_rate']:.2%}")
+            print(f"Retrieved: {hybrid_result['retrieved_count']} docs")
+            if hybrid_result.get('keywords'):
+                print(f"Keywords: {hybrid_result['keywords']}")
 
-        print(f"\n--- Noise Judgments ---")
-        for j in result['noise_judgments']:
-            status = "Noise" if j['is_noise'] else "Non-noise"
-            print(f"[{j['doc_id']}] {status}")
-            print(f"  A1(도메인+기술): {j['A1_domain_tech']}")
-            print(f"  A2(적용/구현): {j['A2_implementation']}")
-            print(f"  사유: {j['reason']}")
+            print("\n--- Comparison ---")
+            rel_diff = hybrid_result['context_relevance'] - naive_result['context_relevance']
+            noise_diff = hybrid_result['noise_rate'] - naive_result['noise_rate']
+            print(f"Context Relevance: Hybrid {'+' if rel_diff >= 0 else ''}{rel_diff:.3f}")
+            print(f"Noise Rate: Hybrid {'+' if noise_diff >= 0 else ''}{noise_diff:.2%}")
+
+        else:
+            # 단일 retriever 평가
+            print(f"\n{'='*60}")
+            print(f"Single Query Evaluation ({args.retriever.upper()})")
+            print(f"{'='*60}")
+            print(f"Query: {args.single_query}")
+
+            if args.retriever == "hybrid":
+                retriever = HybridRetriever(doc_types=args.doc_types)
+            else:
+                retriever = NaiveRetriever(doc_types=args.doc_types)
+
+            result = evaluate_single_query(retriever, args.single_query, k=args.top_k, retriever_type=args.retriever)
+
+            print(f"\n--- Results ---")
+            print(f"Context Relevance: {result['context_relevance']:.3f}")
+            print(f"Noise Rate@{args.top_k}: {result['noise_rate']:.2%}")
+
+            print(f"\n--- Retrieved Documents ---")
+            for i, doc in enumerate(result['retrieved_docs']):
+                print(f"\n{i+1}. [doc_id: {doc['doc_id']}] similarity: {doc['similarity']:.4f}")
+                print(f"   {doc['content_preview']}")
+
+            print(f"\n--- Noise Judgments ---")
+            for j in result['noise_judgments']:
+                status = "Noise" if j['is_noise'] else "Non-noise"
+                print(f"[{j['doc_id']}] {status}")
+                print(f"  A1(도메인+기술): {j['A1_domain_tech']}")
+                print(f"  A2(적용/구현): {j['A2_implementation']}")
+                print(f"  사유: {j['reason']}")
 
     else:
         # 배치 평가
@@ -299,7 +539,9 @@ def main():
             queries=queries,
             doc_types=args.doc_types,
             k=args.top_k,
-            save=not args.no_save
+            save=not args.no_save,
+            retriever_type=args.retriever,
+            compare=args.compare
         )
 
 
