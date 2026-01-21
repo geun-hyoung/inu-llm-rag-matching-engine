@@ -15,6 +15,102 @@ from src.rag.query.retriever import HybridRetriever
 from config.settings import RESULTS_DIR
 
 
+def build_doc_candidates(local_results: list, global_results: list) -> list:
+    """
+    AHP 입력용 문서 단위 정규화 결과 생성
+
+    - source_doc_id 기준으로 그룹핑
+    - 대표 similarity는 max 사용
+    - 채널(local/global) 출현 정보 포함
+
+    Args:
+        local_results: local search 전체 결과
+        global_results: global search 전체 결과
+
+    Returns:
+        문서 단위로 집계된 후보 리스트
+    """
+    doc_map = {}  # source_doc_id -> 집계 정보
+
+    # local + global 전체 결과에서 집계
+    all_results = []
+    for r in local_results:
+        all_results.append({**r, '_channel': 'local'})
+    for r in global_results:
+        all_results.append({**r, '_channel': 'global'})
+
+    for r in all_results:
+        doc_id = r.get('metadata', {}).get('source_doc_id')
+        if not doc_id:
+            continue
+
+        doc_id = str(doc_id)
+        similarity = r.get('similarity', 0)
+        channel = r.get('_channel', 'unknown')
+        search_type = r.get('search_type', channel)
+
+        if doc_id not in doc_map:
+            doc_map[doc_id] = {
+                'source_doc_id': doc_id,
+                'max_similarity': similarity,
+                'similarities': [similarity],
+                'hit_count': 0,
+                'channels': set(),
+                'local_hits': 0,
+                'global_hits': 0,
+                'best_match': None
+            }
+
+        doc_info = doc_map[doc_id]
+        doc_info['similarities'].append(similarity)
+        doc_info['hit_count'] += 1
+        doc_info['channels'].add(channel)
+
+        if channel == 'local':
+            doc_info['local_hits'] += 1
+        else:
+            doc_info['global_hits'] += 1
+
+        # max similarity 갱신 및 best_match 업데이트
+        if similarity > doc_info['max_similarity']:
+            doc_info['max_similarity'] = similarity
+
+        if doc_info['best_match'] is None or similarity >= doc_info['best_match'].get('similarity', 0):
+            if search_type == 'local':
+                doc_info['best_match'] = {
+                    'search_type': 'local',
+                    'similarity': similarity,
+                    'entity_name': r.get('metadata', {}).get('name', 'N/A'),
+                    'entity_type': r.get('metadata', {}).get('entity_type', 'N/A')
+                }
+            else:
+                doc_info['best_match'] = {
+                    'search_type': 'global',
+                    'similarity': similarity,
+                    'source_entity': r.get('metadata', {}).get('source_entity', 'N/A'),
+                    'target_entity': r.get('metadata', {}).get('target_entity', 'N/A'),
+                    'keywords': r.get('metadata', {}).get('keywords', 'N/A')
+                }
+
+    # 결과 정리 및 정렬
+    candidates = []
+    for doc_id, info in doc_map.items():
+        candidates.append({
+            'source_doc_id': info['source_doc_id'],
+            'max_similarity': info['max_similarity'],
+            'hit_count': info['hit_count'],
+            'channels': sorted(list(info['channels'])),
+            'local_hits': info['local_hits'],
+            'global_hits': info['global_hits'],
+            'best_match': info['best_match']
+        })
+
+    # max_similarity 기준 내림차순 정렬
+    candidates.sort(key=lambda x: x['max_similarity'], reverse=True)
+
+    return candidates
+
+
 def load_article_data():
     """원본 논문 데이터 로드"""
     try:
@@ -179,7 +275,25 @@ def save_query_result(result: dict, article_data: dict, output_dir: str = None):
                 ]
             }
         },
-        "source_papers": source_papers
+        "source_papers": source_papers,
+        # AHP 입력용 문서 단위 정규화 결과
+        "doc_candidates": build_doc_candidates(
+            local_results=result['local_results'],
+            global_results=result['global_results']
+        ),
+        # 검색 설정값 (재현성/디버깅용)
+        "retrieval_config": {
+            "local_top_k": len(result['local_results']),
+            "global_top_k": len(result['global_results']),
+            "final_top_k": 5,
+            "merge_strategy": "round_robin",
+            "dedup_policy": "max_similarity",
+            "graph_hops": 1,
+            "score_types": {
+                "local_similarity": "entity_name ↔ low_level_keywords cosine",
+                "global_similarity": "relation_keywords ↔ high_level_keywords cosine"
+            }
+        }
     }
 
     # 파일 저장
