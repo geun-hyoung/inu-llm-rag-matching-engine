@@ -211,7 +211,7 @@ class HybridRetriever:
         top_k: int = 10
     ) -> List[Dict]:
         """
-        Local/Global 결과 병합 (Round-Robin 방식)
+        Local/Global 결과 병합 (dedup + similarity 정렬)
 
         Args:
             local_results: Local Search 결과
@@ -219,30 +219,34 @@ class HybridRetriever:
             top_k: 최종 반환할 결과 수
 
         Returns:
-            병합된 결과 리스트
+            병합된 결과 리스트 (doc_id 기준 dedup, similarity 내림차순)
         """
-        merged = []
-        local_idx = 0
-        global_idx = 0
+        # 1. 전체 결과 합치기
+        all_results = local_results + global_results
 
-        # Round-Robin: 번갈아가며 추가
-        while len(merged) < top_k:
-            if local_idx < len(local_results):
-                merged.append(local_results[local_idx])
-                local_idx += 1
+        # 2. doc_id 기준 dedup (max similarity)
+        doc_map = {}
+        for r in all_results:
+            doc_id = r.get('metadata', {}).get('source_doc_id')
+            if not doc_id:
+                continue
 
-            if len(merged) >= top_k:
-                break
+            doc_id = str(doc_id)
+            similarity = r.get('similarity', 0)
 
-            if global_idx < len(global_results):
-                merged.append(global_results[global_idx])
-                global_idx += 1
+            if doc_id not in doc_map:
+                doc_map[doc_id] = r
+            else:
+                # max similarity로 갱신
+                if similarity > doc_map[doc_id].get('similarity', 0):
+                    doc_map[doc_id] = r
 
-            # 둘 다 소진되면 종료
-            if local_idx >= len(local_results) and global_idx >= len(global_results):
-                break
+        # 3. similarity 내림차순 정렬
+        deduped = list(doc_map.values())
+        deduped.sort(key=lambda x: x.get('similarity', 0), reverse=True)
 
-        return merged
+        # 4. Top-K 자르기
+        return deduped[:top_k]
 
     def retrieve(
         self,
