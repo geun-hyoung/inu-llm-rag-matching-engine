@@ -1,6 +1,6 @@
 """
-RAGAS 라이브러리 기반 평가 메트릭
-공식 라이브러리를 사용한 검증된 평가 방법론
+Context Relevance 평가 모듈
+RAGAS 라이브러리 기반 Retrieval 평가
 """
 
 import sys
@@ -13,12 +13,7 @@ from config.settings import OPENAI_API_KEY
 # RAGAS 라이브러리 임포트
 try:
     from ragas import evaluate, EvaluationDataset, SingleTurnSample
-    from ragas.metrics import (
-        Faithfulness,
-        ResponseRelevancy,
-        LLMContextPrecisionWithoutReference,
-        LLMContextRecall,
-    )
+    from ragas.metrics import LLMContextPrecisionWithoutReference
     from ragas.llms import LangchainLLMWrapper
     from langchain_openai import ChatOpenAI
     RAGAS_AVAILABLE = True
@@ -40,214 +35,154 @@ def get_evaluator_llm():
     return LangchainLLMWrapper(llm)
 
 
-def evaluate_rag(
+def evaluate_context_relevance(
     query: str,
-    contexts: List[str],
-    answer: str,
-    reference: str = None
-) -> Dict[str, float]:
+    contexts: List[str]
+) -> float:
     """
-    RAGAS를 사용한 RAG 평가
+    Context Relevance 평가 (Retrieval 전용)
+
+    Ground Truth 없이 검색된 문서들이 쿼리와 관련 있는지 평가합니다.
 
     Args:
-        query: 사용자 질문
-        contexts: 검색된 컨텍스트 리스트
-        answer: 생성된 응답
-        reference: 정답 (선택, LLMContextRecall에 필요)
+        query: 사용자 질문/쿼리
+        contexts: 검색된 컨텍스트(문서) 리스트
 
     Returns:
-        각 메트릭의 점수 딕셔너리
+        Context Relevance 점수 (0~1, 높을수록 관련성 높음)
+
+    Example:
+        >>> score = evaluate_context_relevance(
+        ...     query="스마트팜 IoT 센서 기술",
+        ...     contexts=["스마트팜 센서 네트워크 구축...", "딥러닝 이미지 분류..."]
+        ... )
+        >>> print(f"Context Relevance: {score:.3f}")
     """
     if not RAGAS_AVAILABLE:
-        return _fallback_evaluate(query, contexts, answer)
+        return _fallback_context_relevance(query, contexts)
+
+    if not contexts:
+        return 0.0
 
     try:
         evaluator_llm = get_evaluator_llm()
 
-        # 샘플 생성
+        # Retrieval 평가용 더미 응답 생성
+        dummy_response = f"쿼리 '{query}'에 대한 검색 결과입니다."
+
         sample = SingleTurnSample(
             user_input=query,
             retrieved_contexts=contexts,
-            response=answer,
-            reference=reference or answer  # reference 없으면 answer 사용
+            response=dummy_response
         )
 
-        # 메트릭 설정
-        metrics = [
-            Faithfulness(),
-            ResponseRelevancy(),
-            LLMContextPrecisionWithoutReference(),
-        ]
-
-        # reference가 있으면 Context Recall 추가
-        if reference:
-            metrics.append(LLMContextRecall())
-
-        # 데이터셋 생성
+        metric = LLMContextPrecisionWithoutReference()
         dataset = EvaluationDataset(samples=[sample])
 
-        # 평가 실행
         result = evaluate(
             dataset=dataset,
-            metrics=metrics,
+            metrics=[metric],
             llm=evaluator_llm
         )
 
-        # 결과 추출
-        scores = {}
         df = result.to_pandas()
 
-        if 'faithfulness' in df.columns:
-            scores['faithfulness'] = float(df['faithfulness'].iloc[0])
-        if 'answer_relevancy' in df.columns:
-            scores['answer_relevance'] = float(df['answer_relevancy'].iloc[0])
-        elif 'response_relevancy' in df.columns:
-            scores['answer_relevance'] = float(df['response_relevancy'].iloc[0])
         if 'llm_context_precision_without_reference' in df.columns:
-            scores['context_precision'] = float(df['llm_context_precision_without_reference'].iloc[0])
-        if 'context_recall' in df.columns:
-            scores['context_recall'] = float(df['context_recall'].iloc[0])
+            score = float(df['llm_context_precision_without_reference'].iloc[0])
+            if score != score:  # NaN 처리
+                return 0.0
+            return score
 
-        # NaN 처리
-        for key in scores:
-            if scores[key] != scores[key]:  # NaN check
-                scores[key] = 0.0
-
-        return scores
+        return 0.0
 
     except Exception as e:
-        print(f"RAGAS evaluation error: {e}")
-        return _fallback_evaluate(query, contexts, answer)
+        print(f"Context Relevance evaluation error: {e}")
+        return _fallback_context_relevance(query, contexts)
 
 
-def _fallback_evaluate(
+def _fallback_context_relevance(
     query: str,
-    contexts: List[str],
-    answer: str
-) -> Dict[str, float]:
-    """
-    RAGAS 사용 불가 시 폴백 평가 (간단한 휴리스틱)
-    """
-    scores = {
-        "faithfulness": 0.0,
-        "answer_relevance": 0.0,
-        "context_precision": 0.0,
-    }
+    contexts: List[str]
+) -> float:
+    """RAGAS 사용 불가 시 폴백 (단어 겹침 기반)"""
+    if not contexts or not query:
+        return 0.0
 
-    if not answer or not contexts:
-        return scores
-
-    # 간단한 휴리스틱: 컨텍스트와 답변의 단어 겹침 비율
-    context_text = " ".join(contexts).lower()
-    answer_words = set(answer.lower().split())
-    context_words = set(context_text.split())
     query_words = set(query.lower().split())
+    context_text = " ".join(contexts).lower()
+    context_words = set(context_text.split())
 
-    # Faithfulness: 답변 단어가 컨텍스트에 얼마나 있는지
-    if answer_words:
-        overlap = len(answer_words & context_words) / len(answer_words)
-        scores["faithfulness"] = min(1.0, overlap * 1.5)
+    if not query_words:
+        return 0.0
 
-    # Answer Relevance: 답변이 질문 키워드를 얼마나 포함하는지
-    if query_words:
-        overlap = len(query_words & answer_words) / len(query_words)
-        scores["answer_relevance"] = min(1.0, overlap * 2)
-
-    # Context Precision: 컨텍스트가 질문 키워드를 얼마나 포함하는지
-    if query_words:
-        overlap = len(query_words & context_words) / len(query_words)
-        scores["context_precision"] = min(1.0, overlap * 1.5)
-
-    return scores
+    overlap = len(query_words & context_words) / len(query_words)
+    return min(1.0, overlap * 1.5)
 
 
-def evaluate_batch(
+def evaluate_context_relevance_batch(
     samples: List[Dict]
-) -> List[Dict[str, float]]:
+) -> List[float]:
     """
-    배치 평가
+    배치 Context Relevance 평가
 
     Args:
-        samples: [{"query": str, "contexts": List[str], "answer": str}, ...]
+        samples: [{"query": str, "contexts": List[str]}, ...]
 
     Returns:
-        각 샘플의 점수 리스트
+        각 샘플의 Context Relevance 점수 리스트
     """
     if not RAGAS_AVAILABLE:
-        return [_fallback_evaluate(s["query"], s["contexts"], s["answer"]) for s in samples]
+        return [_fallback_context_relevance(s["query"], s["contexts"]) for s in samples]
 
     try:
         evaluator_llm = get_evaluator_llm()
 
-        # 샘플 리스트 생성
         ragas_samples = []
         for s in samples:
+            dummy_response = f"쿼리 '{s['query']}'에 대한 검색 결과입니다."
             ragas_samples.append(SingleTurnSample(
                 user_input=s["query"],
                 retrieved_contexts=s["contexts"],
-                response=s["answer"],
-                reference=s.get("reference", s["answer"])
+                response=dummy_response
             ))
 
-        # 데이터셋 생성
         dataset = EvaluationDataset(samples=ragas_samples)
+        metric = LLMContextPrecisionWithoutReference()
 
-        # 메트릭 설정
-        metrics = [
-            Faithfulness(),
-            ResponseRelevancy(),
-            LLMContextPrecisionWithoutReference(),
-        ]
-
-        # 평가 실행
         result = evaluate(
             dataset=dataset,
-            metrics=metrics,
+            metrics=[metric],
             llm=evaluator_llm
         )
 
-        # 결과 변환
         df = result.to_pandas()
-        results = []
+        scores = []
 
         for i in range(len(df)):
-            scores = {}
-            if 'faithfulness' in df.columns:
-                scores['faithfulness'] = float(df['faithfulness'].iloc[i])
-            if 'answer_relevancy' in df.columns:
-                scores['answer_relevance'] = float(df['answer_relevancy'].iloc[i])
-            elif 'response_relevancy' in df.columns:
-                scores['answer_relevance'] = float(df['response_relevancy'].iloc[i])
             if 'llm_context_precision_without_reference' in df.columns:
-                scores['context_precision'] = float(df['llm_context_precision_without_reference'].iloc[i])
+                score = float(df['llm_context_precision_without_reference'].iloc[i])
+                if score != score:  # NaN
+                    score = 0.0
+                scores.append(score)
+            else:
+                scores.append(0.0)
 
-            # NaN 처리
-            for key in scores:
-                if scores[key] != scores[key]:
-                    scores[key] = 0.0
-
-            results.append(scores)
-
-        return results
+        return scores
 
     except Exception as e:
-        print(f"RAGAS batch evaluation error: {e}")
-        return [_fallback_evaluate(s["query"], s["contexts"], s["answer"]) for s in samples]
+        print(f"Batch Context Relevance error: {e}")
+        return [_fallback_context_relevance(s["query"], s["contexts"]) for s in samples]
 
 
 if __name__ == "__main__":
-    # 테스트
     print(f"RAGAS available: {RAGAS_AVAILABLE}")
 
-    test_query = "딥러닝을 활용한 의료영상 분석 연구자는 누구인가요?"
+    test_query = "스마트팜 IoT 센서 기술"
     test_contexts = [
-        "김철수 교수는 CNN 기반 의료영상 분석 연구를 수행하고 있다.",
-        "이영희 교수는 자연어처리 분야를 연구한다.",
+        "스마트팜에서 IoT 센서를 활용한 환경 모니터링 시스템을 구축하였다.",
+        "딥러닝 이미지 분류 알고리즘의 성능을 비교 분석하였다.",
     ]
-    test_answer = "김철수 교수가 딥러닝 기반 의료영상 분석 연구를 수행하고 있습니다."
 
-    print("\nTesting RAGAS metrics...")
-    scores = evaluate_rag(test_query, test_contexts, test_answer)
-
-    for metric, score in scores.items():
-        print(f"  {metric}: {score:.3f}")
+    print("\nTesting Context Relevance...")
+    score = evaluate_context_relevance(test_query, test_contexts)
+    print(f"  Context Relevance: {score:.3f}")
