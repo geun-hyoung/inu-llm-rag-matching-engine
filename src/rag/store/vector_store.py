@@ -37,7 +37,19 @@ COLLECTIONS = {
 
 
 class ChromaVectorStore:
-    """ChromaDB 기반 벡터 저장소 - 9개 컬렉션 관리 (엔티티/관계/청크)"""
+    """ChromaDB 기반 벡터 저장소 - 9개 컬렉션 관리 (엔티티/관계/청크)
+
+    싱글톤 패턴: 여러 retriever가 같은 인스턴스를 공유하여
+    동시 접근으로 인한 HNSW 인덱스 충돌 방지
+    """
+
+    _instance = None
+    _initialized = False
+
+    def __new__(cls, persist_dir: str = None):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
 
     def __init__(self, persist_dir: str = None):
         """
@@ -46,6 +58,10 @@ class ChromaVectorStore:
         Args:
             persist_dir: 영구 저장 디렉토리
         """
+        # 이미 초기화되었으면 스킵
+        if ChromaVectorStore._initialized:
+            return
+
         self.persist_dir = Path(persist_dir or RAG_STORE_DIR) / "chromadb"
         self.persist_dir.mkdir(parents=True, exist_ok=True)
 
@@ -60,6 +76,7 @@ class ChromaVectorStore:
         self._init_collections()
 
         print(f"ChromaDB initialized at: {self.persist_dir}")
+        ChromaVectorStore._initialized = True
 
     def _init_collections(self):
         """6개 컬렉션 생성/로드"""
