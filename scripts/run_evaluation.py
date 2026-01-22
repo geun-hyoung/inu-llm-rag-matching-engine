@@ -51,7 +51,8 @@ def extract_docs_from_hybrid_results(merged_results: list) -> list:
     docs = []
     for r in merged_results:
         doc_id = r.get('metadata', {}).get('source_doc_id', '')
-        content = r.get('document', '')
+        # 원본 chunk content 우선 사용, 없으면 entity/relation description 사용
+        content = r.get('original_content') or r.get('document', '')
         similarity = r.get('similarity', 0)
 
         if doc_id:

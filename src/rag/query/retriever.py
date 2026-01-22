@@ -248,6 +248,63 @@ class HybridRetriever:
         # 4. Top-K 자르기
         return deduped[:top_k]
 
+    def _enrich_with_original_content(
+        self,
+        merged_results: List[Dict]
+    ) -> List[Dict]:
+        """
+        merged_results에 원본 chunk content 추가
+
+        GraphRAG 엔티티/관계의 짧은 description 대신
+        원본 문서의 전체 content를 추가하여 평가 정확도 향상
+
+        Args:
+            merged_results: 병합된 검색 결과
+
+        Returns:
+            original_content가 추가된 결과 리스트
+        """
+        if not merged_results:
+            return merged_results
+
+        # 1. doc_id 목록 추출
+        doc_ids = []
+        for r in merged_results:
+            doc_id = r.get('metadata', {}).get('source_doc_id')
+            if doc_id:
+                doc_ids.append(str(doc_id))
+
+        if not doc_ids:
+            return merged_results
+
+        # 2. 각 doc_id에 대해 chunk 검색
+        doc_contents = {}
+        for doc_id in set(doc_ids):
+            for doc_type in self.doc_types:
+                collection_name = f"{doc_type}_chunks"
+                if collection_name not in self.vector_store.collections:
+                    continue
+
+                collection = self.vector_store.collections[collection_name]
+                try:
+                    results = collection.get(
+                        where={"doc_id": str(doc_id)},
+                        include=["documents"]
+                    )
+                    if results and results["documents"]:
+                        doc_contents[doc_id] = results["documents"][0]
+                        break
+                except:
+                    pass
+
+        # 3. merged_results에 original_content 추가
+        for r in merged_results:
+            doc_id = str(r.get('metadata', {}).get('source_doc_id', ''))
+            if doc_id in doc_contents:
+                r['original_content'] = doc_contents[doc_id]
+
+        return merged_results
+
     def retrieve(
         self,
         query: str,
@@ -290,6 +347,9 @@ class HybridRetriever:
             merged_results = local_results[:final_top_k]
         else:
             merged_results = global_results[:final_top_k]
+
+        # 4. 원본 chunk content 추가 (평가용)
+        merged_results = self._enrich_with_original_content(merged_results)
 
         return {
             "query": query,
