@@ -13,13 +13,21 @@ from config.settings import OPENAI_API_KEY
 # RAGAS 라이브러리 임포트
 try:
     from ragas import evaluate, EvaluationDataset, SingleTurnSample
-    from ragas.metrics import LLMContextPrecisionWithoutReference
+    from ragas.metrics._context_relevance import ContextRelevance
     from ragas.llms import LangchainLLMWrapper
     from langchain_openai import ChatOpenAI
     RAGAS_AVAILABLE = True
 except ImportError:
-    RAGAS_AVAILABLE = False
-    print("RAGAS not installed. Run: pip install ragas langchain-openai")
+    try:
+        # 새로운 API (ragas >= 0.2)
+        from ragas import evaluate, EvaluationDataset, SingleTurnSample
+        from ragas.metrics.collections import ContextRelevance
+        from ragas.llms import LangchainLLMWrapper
+        from langchain_openai import ChatOpenAI
+        RAGAS_AVAILABLE = True
+    except ImportError:
+        RAGAS_AVAILABLE = False
+        print("RAGAS not installed. Run: pip install ragas langchain-openai")
 
 
 def get_evaluator_llm():
@@ -67,16 +75,12 @@ def evaluate_context_relevance(
     try:
         evaluator_llm = get_evaluator_llm()
 
-        # Retrieval 평가용 더미 응답 생성
-        dummy_response = f"쿼리 '{query}'에 대한 검색 결과입니다."
-
         sample = SingleTurnSample(
             user_input=query,
-            retrieved_contexts=contexts,
-            response=dummy_response
+            retrieved_contexts=contexts
         )
 
-        metric = LLMContextPrecisionWithoutReference()
+        metric = ContextRelevance(llm=evaluator_llm)
         dataset = EvaluationDataset(samples=[sample])
 
         result = evaluate(
@@ -87,8 +91,10 @@ def evaluate_context_relevance(
 
         df = result.to_pandas()
 
-        if 'llm_context_precision_without_reference' in df.columns:
-            score = float(df['llm_context_precision_without_reference'].iloc[0])
+        # Context Relevance 컬럼명 확인
+        relevance_cols = [col for col in df.columns if 'relevance' in col.lower() or 'context' in col.lower()]
+        if relevance_cols:
+            score = float(df[relevance_cols[0]].iloc[0])
             if score != score:  # NaN 처리
                 return 0.0
             return score
@@ -139,15 +145,13 @@ def evaluate_context_relevance_batch(
 
         ragas_samples = []
         for s in samples:
-            dummy_response = f"쿼리 '{s['query']}'에 대한 검색 결과입니다."
             ragas_samples.append(SingleTurnSample(
                 user_input=s["query"],
-                retrieved_contexts=s["contexts"],
-                response=dummy_response
+                retrieved_contexts=s["contexts"]
             ))
 
         dataset = EvaluationDataset(samples=ragas_samples)
-        metric = LLMContextPrecisionWithoutReference()
+        metric = ContextRelevance(llm=evaluator_llm)
 
         result = evaluate(
             dataset=dataset,
@@ -158,9 +162,13 @@ def evaluate_context_relevance_batch(
         df = result.to_pandas()
         scores = []
 
+        # Context Relevance 컬럼명 확인
+        relevance_cols = [col for col in df.columns if 'relevance' in col.lower() or 'context' in col.lower()]
+        col_name = relevance_cols[0] if relevance_cols else None
+
         for i in range(len(df)):
-            if 'llm_context_precision_without_reference' in df.columns:
-                score = float(df['llm_context_precision_without_reference'].iloc[i])
+            if col_name and col_name in df.columns:
+                score = float(df[col_name].iloc[i])
                 if score != score:  # NaN
                     score = 0.0
                 scores.append(score)
