@@ -217,13 +217,13 @@ def analyze_patent_content(data: List[Dict]) -> Dict[str, Any]:
     abstracts = []
     
     for item in data:
-        title = item.get("kipris_application_name", "")
-        abstract = item.get("kipris_abstract", "")
+        title = item.get("title", "")
+        text = item.get("text", "")
         
         if title:
             titles.append(title)
-        if abstract:
-            abstracts.append(abstract)
+        if text:
+            abstracts.append(text)
     
     # 길이 분석
     title_lengths = [len(t) for t in titles]
@@ -250,40 +250,40 @@ def analyze_patent_content(data: List[Dict]) -> Dict[str, Any]:
         },
         "content_completeness": {
             "has_title": len(titles),
-            "has_abstract": len(abstracts),
-            "has_both": sum(1 for item in data if item.get("kipris_application_name") and item.get("kipris_abstract"))
+            "has_text": len(abstracts),
+            "has_both": sum(1 for item in data if item.get("title") and item.get("text"))
         }
     }
 
 
 def analyze_abstract_detailed(data: List[Dict]) -> Dict[str, Any]:
-    """초록(kipris_abstract)에 대한 상세 분석"""
+    """텍스트(text)에 대한 상세 분석"""
     if not data:
         return {}
     
-    abstracts = []
-    abstract_lengths = []
+    texts = []
+    text_lengths = []
     
     for item in data:
-        abstract = item.get("kipris_abstract", "")
-        if abstract and abstract.strip():  # 비어있지 않은 경우만
-            abstracts.append(abstract)
-            abstract_lengths.append(len(abstract))
+        text = item.get("text", "")
+        if text and text.strip():  # 비어있지 않은 경우만
+            texts.append(text)
+            text_lengths.append(len(text))
     
     total_items = len(data)
-    missing_count = total_items - len(abstracts)
+    missing_count = total_items - len(texts)
     missing_rate = (missing_count / total_items * 100) if total_items > 0 else 0
     
-    if not abstract_lengths:
+    if not text_lengths:
         return {
             "total_items": total_items,
             "missing_count": missing_count,
             "missing_rate": missing_rate,
-            "error": "초록 데이터가 없습니다."
+            "error": "텍스트 데이터가 없습니다."
         }
     
     # 기술 통계량 계산
-    lengths_array = np.array(abstract_lengths)
+    lengths_array = np.array(text_lengths)
     
     # 4분위수 계산
     q1 = np.percentile(lengths_array, 25)
@@ -307,8 +307,8 @@ def analyze_abstract_detailed(data: List[Dict]) -> Dict[str, Any]:
         "total_items": total_items,
         "missing_count": missing_count,
         "missing_rate": round(missing_rate, 2),
-        "valid_count": len(abstracts),
-        "valid_rate": round((len(abstracts) / total_items * 100) if total_items > 0 else 0, 2),
+        "valid_count": len(texts),
+        "valid_rate": round((len(texts) / total_items * 100) if total_items > 0 else 0, 2),
         "descriptive_statistics": {
             "min": int(min_length),
             "max": int(max_length),
@@ -327,27 +327,27 @@ def analyze_abstract_detailed(data: List[Dict]) -> Dict[str, Any]:
             "q3_over": int(np.sum(lengths_array > q3))
         },
         "length_summary": {
-            "shortest": min(abstract_lengths),
-            "longest": max(abstract_lengths),
-            "shortest_text": abstracts[np.argmin(abstract_lengths)][:100] + "..." if abstracts else "",
-            "longest_text": abstracts[np.argmax(abstract_lengths)][:100] + "..." if abstracts else ""
+            "shortest": min(text_lengths),
+            "longest": max(text_lengths),
+            "shortest_text": texts[np.argmin(text_lengths)][:100] + "..." if texts else "",
+            "longest_text": texts[np.argmax(text_lengths)][:100] + "..." if texts else ""
         }
     }
 
 
 def visualize_abstract_distribution(data: List[Dict], output_dir: Path):
-    """초록 길이 분포 시각화 - 간단하고 트렌드한 학술적 스타일"""
+    """텍스트 길이 분포 시각화 - 간단하고 트렌드한 학술적 스타일"""
     if not data:
         return
     
-    abstract_lengths = []
+    text_lengths = []
     for item in data:
-        abstract = item.get("kipris_abstract", "")
-        if abstract and abstract.strip():
-            abstract_lengths.append(len(abstract))
+        text = item.get("text", "")
+        if text and text.strip():
+            text_lengths.append(len(text))
     
-    if not abstract_lengths:
-        print("[경고] 시각화할 초록 데이터가 없습니다.")
+    if not text_lengths:
+        print("[경고] 시각화할 텍스트 데이터가 없습니다.")
         return
     
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -356,15 +356,15 @@ def visualize_abstract_distribution(data: List[Dict], output_dir: Path):
     fig, ax = plt.subplots(figsize=(10, 6))
     
     # 히스토그램 (KDE 포함) - seaborn 스타일
-    sns.histplot(abstract_lengths, bins=40, kde=True, 
+    sns.histplot(text_lengths, bins=40, kde=True, 
                  color='#3498db', alpha=0.7, 
                  edgecolor='white', linewidth=0.5)
     
     # 통계 선 표시
-    mean_val = np.mean(abstract_lengths)
-    median_val = np.median(abstract_lengths)
-    q1_val = np.percentile(abstract_lengths, 25)
-    q3_val = np.percentile(abstract_lengths, 75)
+    mean_val = np.mean(text_lengths)
+    median_val = np.median(text_lengths)
+    q1_val = np.percentile(text_lengths, 25)
+    q3_val = np.percentile(text_lengths, 75)
     
     ax.axvline(mean_val, color='#e74c3c', linestyle='--', linewidth=2, 
                label=f'Mean: {mean_val:.0f}', zorder=5)
@@ -372,9 +372,9 @@ def visualize_abstract_distribution(data: List[Dict], output_dir: Path):
                label=f'Median: {median_val:.0f}', zorder=5)
     
     # 스타일링 - 학술적이고 트렌드한 느낌
-    ax.set_xlabel('Abstract Length (characters)', fontsize=13, fontweight='bold')
+    ax.set_xlabel('Text Length (characters)', fontsize=13, fontweight='bold')
     ax.set_ylabel('Frequency', fontsize=13, fontweight='bold')
-    ax.set_title('Distribution of Patent Abstract Lengths', 
+    ax.set_title('Distribution of Patent Text Lengths', 
                  fontsize=15, fontweight='bold', pad=20)
     
     # 그리드 (은은하게)
@@ -389,20 +389,20 @@ def visualize_abstract_distribution(data: List[Dict], output_dir: Path):
               shadow=True, fontsize=10)
     
     # 통계 정보를 텍스트로 간단히 추가 (하단에)
-    stats_text = f'n = {len(abstract_lengths):,} | ' \
+    stats_text = f'n = {len(text_lengths):,} | ' \
                  f'Q1: {q1_val:.0f} | Q3: {q3_val:.0f} | ' \
-                 f'SD: {np.std(abstract_lengths):.1f}'
+                 f'SD: {np.std(text_lengths):.1f}'
     ax.text(0.5, 0.02, stats_text, transform=ax.transAxes, 
             ha='center', va='bottom', fontsize=9, 
             bbox=dict(boxstyle='round', facecolor='white', alpha=0.8, edgecolor='none'),
             style='italic')
     
     plt.tight_layout()
-    output_path = output_dir / "abstract_length_distribution.png"
+    output_path = output_dir / "patent_text_length_distribution.png"
     plt.savefig(output_path, dpi=300, bbox_inches='tight', facecolor='white')
     plt.close()
     
-    print(f"[초록 분포 시각화 저장 완료] {output_path}")
+    print(f"[텍스트 분포 시각화 저장 완료] {output_path}")
 
 
 def detect_language(text: str) -> str:
@@ -444,7 +444,7 @@ def extract_ngrams(words: List[str], n: int) -> List[Tuple[str, ...]]:
     return ngrams
 
 
-def analyze_language_distribution(data: List[Dict], text_field: str = "kipris_abstract") -> Dict[str, Any]:
+def analyze_language_distribution(data: List[Dict], text_field: str = "text") -> Dict[str, Any]:
     """텍스트 데이터의 언어 분포를 분석합니다."""
     if not data:
         return {}
@@ -1212,11 +1212,11 @@ def main():
     }
     print("[분석 완료] 모든 EDA 분석 완료")
     
-    # RAG 텍스트 분석 (kipris_abstract)
+    # RAG 텍스트 분석 (text)
     print("\n[RAG 텍스트 분석 시작]")
     rag_analysis = analyze_text_for_rag(
         data, 
-        text_field="kipris_abstract", 
+        text_field="text", 
         data_type="patent",
         output_dir=Path(EDA_RESULTS_DIR)
     )

@@ -428,6 +428,8 @@ class KIPRISCollector:
                 original_register_id = register_info["ptnt_rgstr_id"]  # 원본 (하이픈 포함)
                 clean_register_id = register_info["ptnt_rgstr_id_clean"]  # 하이픈 제거된 버전
                 tech_nm = register_info.get("tech_nm", "")  # 특허명 (확인용)
+                invntr_nm = register_info.get("invntr_nm", "")  # 발명자 이름 (확인용)
+                invntr_co_nm = register_info.get("invntr_co_nm", "")  # 발명자 소속 (확인용)
                 mbr_sn = register_info["mbr_sn"]
                 professor_info = register_info.get("professor_info", {})
                 prof_name = professor_info.get("NM", "알 수 없음")
@@ -436,6 +438,10 @@ class KIPRISCollector:
                 print(f"[처리 중] 등록번호 (검색용): {clean_register_id}")
                 if tech_nm:
                     print(f"[확인용] 특허명: {tech_nm}")
+                if invntr_nm:
+                    print(f"[확인용] 발명자 이름: {invntr_nm}")
+                if invntr_co_nm:
+                    print(f"[확인용] 발명자 소속: {invntr_co_nm}")
                 print(f"[교수 정보] 이름: {prof_name}, 사번: {mbr_sn}")
                 
                 try:

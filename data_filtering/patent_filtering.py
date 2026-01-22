@@ -12,6 +12,7 @@ from datetime import datetime
 # 상위 디렉토리를 경로에 추가
 sys.path.append(str(Path(__file__).parent.parent))
 from config.settings import PATENT_DATA_FILE, DATA_TRAIN_PATENT_FILE
+from data_filtering.text_preprocessing import preprocess_text
 
 
 def load_patent_json(input_file: str = None) -> List[Dict]:
@@ -108,10 +109,12 @@ def parse_application_date(date_str: Any) -> tuple:
 def filter_patent_data(patents: List[Dict]) -> tuple:
     """
     특허 데이터에서 필수 조건을 만족하는 데이터만 필터링합니다.
+    텍스트 전처리(수식/기호 제거, 100자 이상 5000자 이하 필터링)를 적용합니다.
     
     필터링 조건:
     1. null 값이 있으면 안 되는 필드: kipris_application_name, mbr_sn, kipris_abstract, tech_invnt_se, kipris_register_status
     2. kipris_application_date가 2015년 이후인 데이터만
+    3. kipris_abstract가 전처리 후 100자 이상 5000자 이하인 데이터만
     
     Args:
         patents: 특허 데이터 리스트
@@ -136,7 +139,8 @@ def filter_patent_data(patents: List[Dict]) -> tuple:
         'total': len(patents),
         'null_field_filtered': 0,  # 필수 필드 null로 제외된 개수
         'date_filtered': 0,  # 날짜 조건으로 제외된 개수
-        'passed': 0  # 통과한 개수
+        'text_preprocessing_passed': 0,  # 텍스트 전처리 통과
+        'text_preprocessing_failed': 0  # 텍스트 전처리 실패 (100자 미만)
     }
     
     for idx, patent in enumerate(patents, 1):
@@ -166,13 +170,33 @@ def filter_patent_data(patents: List[Dict]) -> tuple:
             filter_stats['date_filtered'] += 1
             continue
         
-        # 모든 조건 통과
-        # data_type과 no 필드 추가
-        patent['data_type'] = 'patent'
-        patent['no'] = len(filtered_patents) + 1  # 필터링된 데이터의 순번
+        # 3. 텍스트 전처리 (수식/기호 제거, 100자 이상 5000자 이하 필터링)
+        kipris_abstract = patent.get('kipris_abstract')
+        preprocessed_text, is_valid = preprocess_text(kipris_abstract, min_length=100, max_length=5000)
         
-        filtered_patents.append(patent)
-        filter_stats['passed'] += 1
+        if not is_valid:
+            filter_stats['text_preprocessing_failed'] += 1
+            continue  # 최소 길이 조건을 만족하지 않으면 제외
+        
+        filter_stats['text_preprocessing_passed'] += 1
+        
+        # 공통 컬럼 구조로 데이터 생성
+        filtered_patent = {
+            'data_type': 'patent',
+            'no': len(filtered_patents) + 1,  # 필터링된 데이터의 순번
+            'text': preprocessed_text,  # 전처리된 텍스트
+            'title': patent.get('kipris_application_name'),  # 특허명
+            'year': year,  # 연도
+            'professor_info': patent.get('professor_info'),  # 교수 정보
+            'metadata': {  # 추가 메타데이터
+                'mbr_sn': patent.get('mbr_sn'),
+                'tech_invnt_se': patent.get('tech_invnt_se'),
+                'kipris_register_status': patent.get('kipris_register_status'),
+                'kipris_application_date': patent.get('kipris_application_date')
+            }
+        }
+        
+        filtered_patents.append(filtered_patent)
     
     print(f"\n[완료] 데이터 필터링 완료")
     print(f"   - 필터링된 특허: {len(filtered_patents):,}개")
@@ -243,21 +267,14 @@ def main():
     print(f"\n[필터링 상세 통계]")
     print(f"  - 필수 필드 null로 제외된 데이터: {filter_stats['null_field_filtered']:,}개")
     print(f"  - 날짜 조건(2015년 이전)으로 제외된 데이터: {filter_stats['date_filtered']:,}개")
-    print(f"  - 최종 통과한 데이터: {filter_stats['passed']:,}개")
+    print(f"  - 텍스트 전처리 통과 (100자 이상 5000자 이하): {filter_stats['text_preprocessing_passed']:,}개")
+    print(f"  - 텍스트 전처리 실패 (100자 미만 또는 5000자 초과): {filter_stats['text_preprocessing_failed']:,}개")
     
-    # 필수 필드 정보 출력
+    # 컬럼 정보 출력
     if filtered_patents:
-        print(f"\n[필수 필드] null이면 안 되는 필드:")
-        required_fields = ['kipris_application_name', 'mbr_sn', 'kipris_abstract', 'tech_invnt_se', 'kipris_register_status']
-        for field in required_fields:
-            print(f"   - {field}")
-        
-        print(f"\n[컬럼] 샘플 레코드의 컬럼 (처음 10개):")
-        sample_keys = list(filtered_patents[0].keys())[:10]
-        for key in sample_keys:
+        print(f"\n[컬럼] 공통 컬럼 구조:")
+        for key in filtered_patents[0].keys():
             print(f"   - {key}")
-        if len(filtered_patents[0].keys()) > 10:
-            print(f"   ... (총 {len(filtered_patents[0].keys())}개 컬럼)")
     
     print("=" * 60)
     print()

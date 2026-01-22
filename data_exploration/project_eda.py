@@ -167,12 +167,10 @@ def analyze_project_amount(data: List[Dict]) -> Dict[str, Any]:
     
     # 연구비 구간별 분포
     amount_ranges = {
-        "1천만원 미만": sum(1 for a in amounts if a < 10_000_000),
-        "1천만원-5천만원": sum(1 for a in amounts if 10_000_000 <= a < 50_000_000),
-        "5천만원-1억원": sum(1 for a in amounts if 50_000_000 <= a < 100_000_000),
-        "1억원-5억원": sum(1 for a in amounts if 100_000_000 <= a < 500_000_000),
-        "5억원-10억원": sum(1 for a in amounts if 500_000_000 <= a < 1_000_000_000),
-        "10억원 이상": sum(1 for a in amounts if a >= 1_000_000_000)
+        "5천만원 이하": sum(1 for a in amounts if a <= 50_000_000),
+        "5천만원 초과 3억원 이하": sum(1 for a in amounts if 50_000_000 < a <= 300_000_000),
+        "3억원 초과 5억원 이하": sum(1 for a in amounts if 300_000_000 < a <= 500_000_000),
+        "5억원 초과": sum(1 for a in amounts if a > 500_000_000)
     }
     
     # 교수별 평균 연구비
@@ -416,47 +414,47 @@ def visualize_amount_distribution(data: List[Dict], output_dir: Path):
 
 
 def visualize_summary_distribution(data: List[Dict], output_dir: Path):
-    """summary 길이 분포 시각화 - 특허 스타일 참고"""
+    """텍스트 길이 분포 시각화 - 특허 스타일 참고"""
     if not data:
         return
     
-    summary_lengths = []
+    text_lengths = []
     for item in data:
-        summary = item.get("summary", "")
+        text = item.get("text", "")
         
-        if isinstance(summary, list):
-            summary = " ".join(str(s) for s in summary if s)
-        elif summary is None:
-            summary = ""
+        if isinstance(text, list):
+            text = " ".join(str(t) for t in text if t)
+        elif text is None:
+            text = ""
         
-        if summary and summary.strip():
-            summary_lengths.append(len(summary))
+        if text and text.strip():
+            text_lengths.append(len(text))
     
-    if not summary_lengths:
-        print("[경고] 시각화할 summary 데이터가 없습니다.")
+    if not text_lengths:
+        print("[경고] 시각화할 텍스트 데이터가 없습니다.")
         return
     
     output_dir.mkdir(parents=True, exist_ok=True)
     
     fig, ax = plt.subplots(figsize=(10, 6))
     
-    sns.histplot(summary_lengths, bins=40, kde=True, 
+    sns.histplot(text_lengths, bins=40, kde=True, 
                  color='#3498db', alpha=0.7, 
                  edgecolor='white', linewidth=0.5)
     
-    mean_val = np.mean(summary_lengths)
-    median_val = np.median(summary_lengths)
-    q1_val = np.percentile(summary_lengths, 25)
-    q3_val = np.percentile(summary_lengths, 75)
+    mean_val = np.mean(text_lengths)
+    median_val = np.median(text_lengths)
+    q1_val = np.percentile(text_lengths, 25)
+    q3_val = np.percentile(text_lengths, 75)
     
     ax.axvline(mean_val, color='#e74c3c', linestyle='--', linewidth=2, 
                label=f'Mean: {mean_val:.0f}', zorder=5)
     ax.axvline(median_val, color='#2ecc71', linestyle='--', linewidth=2, 
                label=f'Median: {median_val:.0f}', zorder=5)
     
-    ax.set_xlabel('Summary Length (characters)', fontsize=13, fontweight='bold')
+    ax.set_xlabel('Text Length (characters)', fontsize=13, fontweight='bold')
     ax.set_ylabel('Frequency', fontsize=13, fontweight='bold')
-    ax.set_title('Distribution of Project Summary Lengths', 
+    ax.set_title('Distribution of Project Text Lengths', 
                  fontsize=15, fontweight='bold', pad=20)
     
     ax.grid(True, alpha=0.2, linestyle='-', linewidth=0.5)
@@ -468,20 +466,20 @@ def visualize_summary_distribution(data: List[Dict], output_dir: Path):
     ax.legend(loc='upper right', frameon=True, fancybox=True, 
               shadow=True, fontsize=10)
     
-    stats_text = f'n = {len(summary_lengths):,} | ' \
+    stats_text = f'n = {len(text_lengths):,} | ' \
                  f'Q1: {q1_val:.0f} | Q3: {q3_val:.0f} | ' \
-                 f'SD: {np.std(summary_lengths):.1f}'
+                 f'SD: {np.std(text_lengths):.1f}'
     ax.text(0.5, 0.02, stats_text, transform=ax.transAxes, 
             ha='center', va='bottom', fontsize=9, 
             bbox=dict(boxstyle='round', facecolor='white', alpha=0.8, edgecolor='none'),
             style='italic')
     
     plt.tight_layout()
-    output_path = output_dir / "project_summary_length_distribution.png"
+    output_path = output_dir / "project_text_length_distribution.png"
     plt.savefig(output_path, dpi=300, bbox_inches='tight', facecolor='white')
     plt.close()
     
-    print(f"[Summary 분포 시각화 저장 완료] {output_path}")
+    print(f"[텍스트 분포 시각화 저장 완료] {output_path}")
 
 
 def detect_language(text: str) -> str:
@@ -523,7 +521,7 @@ def extract_ngrams(words: List[str], n: int) -> List[Tuple[str, ...]]:
     return ngrams
 
 
-def analyze_language_distribution(data: List[Dict], text_field: str = "summary") -> Dict[str, Any]:
+def analyze_language_distribution(data: List[Dict], text_field: str = "text") -> Dict[str, Any]:
     """텍스트 데이터의 언어 분포를 분석합니다."""
     if not data:
         return {}
@@ -962,6 +960,41 @@ def main():
         print("[오류] 분석할 데이터가 없습니다.")
         return
     
+    # 2015년 이전 데이터 제거 (전처리 단계)
+    original_count = len(data)
+    filtered_data = []
+    for item in data:
+        # excel_base_year 우선 확인
+        base_year = item.get("excel_base_year")
+        if base_year is not None:
+            # 숫자형이면 직접 비교, 문자열이면 변환
+            try:
+                year = int(base_year) if isinstance(base_year, (int, float)) else int(str(base_year).strip())
+                if year >= 2015:
+                    filtered_data.append(item)
+                continue
+            except (ValueError, TypeError):
+                pass
+        
+        # excel_base_year가 없거나 유효하지 않으면 RCH_ST_DT 확인
+        start_date = item.get("RCH_ST_DT", "")
+        if isinstance(start_date, str) and len(start_date) >= 4:
+            try:
+                year = int(start_date[:4])
+                if year >= 2015:
+                    filtered_data.append(item)
+                continue
+            except (ValueError, TypeError):
+                pass
+        
+        # 연도 정보가 없거나 유효하지 않으면 포함 (안전을 위해)
+        filtered_data.append(item)
+    
+    data = filtered_data
+    filtered_count = len(data)
+    if original_count != filtered_count:
+        print(f"[전처리] 2015년 이전 데이터 제거: {original_count - filtered_count}개 제거됨 (전체: {original_count}개 → 필터링 후: {filtered_count}개)")
+    
     # 분석 수행
     results = {
         "basic_info": analyze_basic_info(data),
@@ -973,11 +1006,11 @@ def main():
         "college_department": analyze_college_department_projects(data)
     }
     
-    # RAG 텍스트 분석 (summary)
+    # RAG 텍스트 분석 (text)
     print("\n[RAG 텍스트 분석 시작]")
     rag_analysis = analyze_text_for_rag(
         data, 
-        text_field="summary", 
+        text_field="text", 
         data_type="project",
         output_dir=Path(EDA_RESULTS_DIR)
     )
