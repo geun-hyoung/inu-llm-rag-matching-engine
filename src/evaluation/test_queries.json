@@ -1,9 +1,15 @@
 {
-  "version": "4.0",
-  "description": "산학협력 매칭 시스템 평가용 테스트 쿼리셋 - 그룹 기반 (1 query = N documents)",
+  "version": "5.1",
+  "description": "산학협력 매칭 시스템 평가용 테스트 쿼리셋 - 그룹 기반 (1 query = N documents), 추상화 레벨 다양화",
+  "abstraction_levels": {
+    "concrete": "구체적 전문 용어 사용 (22%)",
+    "medium": "일반적 기술 용어 사용 (43%)",
+    "abstract": "문제/목적 중심 표현 (35%)"
+  },
   "queries": [
     {
-      "query": "주식 시장에서 투자자 감정과 관련된 기술 개발 연구를 찾고 있어요.",
+      "query": "투자자가 어떻게 행동하는지 분석하는 기술 개발 연구를 찾고 있어요.",
+      "abstraction_level": "medium",
       "source_doc_ids": [
         1779,
         1422
@@ -15,7 +21,8 @@
       ]
     },
     {
-      "query": "리튬이온전지 관련 기술 개발 연구를 찾고 있어요, 협력 가능할까요?",
+      "query": "배터리 실리콘 전극이 잘 붙게 하는 기술 개발 연구를 찾고 있어요, 협력 가능할까요?",
+      "abstraction_level": "abstract",
       "source_doc_ids": [
         19,
         103,
@@ -29,7 +36,8 @@
       ]
     },
     {
-      "query": "화재 안전과 관련된 자동 문 잠김장치 기술 개발 관련 연구를 찾고 있어요.",
+      "query": "문이 자동으로 열리고 닫히면서 안전한 기술 개발 관련 연구를 찾고 있어요.",
+      "abstraction_level": "medium",
       "source_doc_ids": [
         221,
         224
@@ -41,7 +49,8 @@
       ]
     },
     {
-      "query": "영상 융합 기술 개발 관련 연구를 찾고 있어요.",
+      "query": "여러 영상을 하나로 합치는 기술 개발 관련 연구를 찾고 있어요.",
+      "abstraction_level": "abstract",
       "source_doc_ids": [
         20,
         34
@@ -53,7 +62,8 @@
       ]
     },
     {
-      "query": "합금 촉매와 탄소껍질 관련 기술 개발 연구를 찾고 있어요.",
+      "query": "금속 소재로 화학반응 촉진하는 기술 개발 연구를 찾고 있어요.",
+      "abstraction_level": "abstract",
       "source_doc_ids": [
         292,
         55
@@ -65,7 +75,8 @@
       ]
     },
     {
-      "query": "영상 해상도 변환 기술 개발 관련 연구를 찾고 있어요.",
+      "query": "저화질 영상 선명하게 복원하는 기술 개발 관련 연구를 찾고 있어요.",
+      "abstraction_level": "medium",
       "source_doc_ids": [
         283,
         230
@@ -77,7 +88,8 @@
       ]
     },
     {
-      "query": "이차전지용 고분자 바인더에 대한 기술 개발 관련 연구를 찾고 있어요.",
+      "query": "배터리 전극이 잘 붙게 하는 바인더 기술 개발 관련 연구를 찾고 있어요.",
+      "abstraction_level": "abstract",
       "source_doc_ids": [
         254,
         268
@@ -89,7 +101,8 @@
       ]
     },
     {
-      "query": "영상 처리 및 디인터레이싱 기술 개발 관련 연구를 찾아줘.",
+      "query": "영상 해상도를 높여주는 필터 기술 개발 관련 연구를 찾아줘.",
+      "abstraction_level": "medium",
       "source_doc_ids": [
         231,
         169,
@@ -103,7 +116,8 @@
       ]
     },
     {
-      "query": "고분자 전해질막 기술 개발 관련 연구를 찾고 있어요.",
+      "query": "이온이 잘 통과하는 막 기술 개발 관련 연구를 찾고 있어요.",
+      "abstraction_level": "abstract",
       "source_doc_ids": [
         190,
         220
@@ -115,7 +129,8 @@
       ]
     },
     {
-      "query": "에지 컴퓨팅에 적용할 초고해상도 영상 복원 기술 개발 관련 연구를 찾고 있어요.",
+      "query": "초고해상도 영상 복원 기술 개발 관련 연구를 찾고 있어요.",
+      "abstraction_level": "medium",
       "source_doc_ids": [
         278,
         287
@@ -127,21 +142,21 @@
       ]
     },
     {
-      "query": "금속 나노입자를 활용한 촉매 기술 개발 관련 연구를 찾고 있어요.",
+      "query": "미세 금속으로 화학 반응을 촉진하는 기술 개발 관련 연구를 찾고 있어요.",
+      "abstraction_level": "medium",
       "source_doc_ids": [
         8,
-        76,
         31
       ],
       "data_type": "patent",
       "references": [
         "휘발성 유기 화합물 제거를 위한 이종 금속 나노입자를 ",
-        "물 전기분해용 전극 제조방법",
         "지지체 위 고분자층 형성을 이용한 탄소껍질을 가진 금속"
       ]
     },
     {
       "query": "리튬 이차전지용 전해액 기술 개발 관련 연구를 찾고 있어요.",
+      "abstraction_level": "concrete",
       "source_doc_ids": [
         17,
         81
@@ -153,7 +168,8 @@
       ]
     },
     {
-      "query": "고소 작업 안전장비 관련 기술 개발 연구를 찾고 있어요.",
+      "query": "높은 곳 작업 시 추락 방지 기술 개발 연구를 찾고 있어요.",
+      "abstraction_level": "medium",
       "source_doc_ids": [
         215,
         214
@@ -165,7 +181,8 @@
       ]
     },
     {
-      "query": "딥러닝 기반 초해상도 이미지 처리 기술 연구를 찾고 있어요, 협력 가능할까요?",
+      "query": "AI로 이미지 해상도 높이는 기술 연구를 찾고 있어요, 협력 가능할까요?",
+      "abstraction_level": "medium",
       "source_doc_ids": [
         66,
         208,
@@ -179,7 +196,8 @@
       ]
     },
     {
-      "query": "리튬 이차전지 및 기체분리막 관련 기술 개발 연구를 찾고 있어요.",
+      "query": "물질을 걸러내는 고분자 막 기술 개발 연구를 찾고 있어요.",
+      "abstraction_level": "medium",
       "source_doc_ids": [
         98,
         229
@@ -191,7 +209,8 @@
       ]
     },
     {
-      "query": "슈퍼커패시터용 그래핀 전극 기술 개발 관련 연구를 찾고 있어요?",
+      "query": "전기를 저장하는 탄소 소재 기술 개발 관련 연구를 찾고 있어요.",
+      "abstraction_level": "medium",
       "source_doc_ids": [
         151,
         279
@@ -203,7 +222,8 @@
       ]
     },
     {
-      "query": "컬러 필터 어레이 관련 기술 개발 연구를 찾고 있어요, 도움 주실 수 있나요?",
+      "query": "카메라로 찍은 이미지 색상을 보정하는 기술 개발 연구를 찾고 있어요, 도움 주실 수 있나요?",
+      "abstraction_level": "medium",
       "source_doc_ids": [
         253,
         110,
@@ -219,7 +239,8 @@
       ]
     },
     {
-      "query": "전동킥보드 안전 기술 개발 관련 연구를 찾고 있어요.",
+      "query": "킥보드 같은 개인 이동수단을 안전하게 타는 기술 개발 관련 연구를 찾고 있어요.",
+      "abstraction_level": "medium",
       "source_doc_ids": [
         91,
         90
@@ -231,7 +252,8 @@
       ]
     },
     {
-      "query": "방향족 및 지방족 알데히드의 나이트릴로의 산화적 전환 관련 기술 개발 연구를 찾고 있어요.",
+      "query": "나이트릴을 합성하는 촉매 기술 개발 연구를 찾고 있어요.",
+      "abstraction_level": "medium",
       "source_doc_ids": [
         142,
         260
@@ -243,7 +265,8 @@
       ]
     },
     {
-      "query": "리튬이차전지의 고분자 코팅 기술 개발 관련 연구를 찾고 있어요.",
+      "query": "배터리 전극 표면을 보호하는 코팅 기술 개발 관련 연구를 찾고 있어요.",
+      "abstraction_level": "medium",
       "source_doc_ids": [
         219,
         71
@@ -256,6 +279,7 @@
     },
     {
       "query": "항생제 내성균 검출을 위한 스마트 마이크로캡슐 기술 개발 관련 연구를 찾고 있어요.",
+      "abstraction_level": "concrete",
       "source_doc_ids": [
         1288,
         1471
@@ -267,7 +291,8 @@
       ]
     },
     {
-      "query": "스마트 감쇠 장치의 기술 개발 관련 연구를 찾고 있어요, 혹시 도움 주실 수 있나요?",
+      "query": "건물 진동 흡수 장치 기술 개발 관련 연구를 찾고 있어요, 혹시 도움 주실 수 있나요?",
+      "abstraction_level": "abstract",
       "source_doc_ids": [
         484,
         579
@@ -279,7 +304,8 @@
       ]
     },
     {
-      "query": "기체센서 개발을 위한 다공성 나노소재 연구를 찾고 있어요.",
+      "query": "가스를 감지하는 센서 소재 기술 연구를 찾고 있어요.",
+      "abstraction_level": "medium",
       "source_doc_ids": [
         888,
         1073
@@ -292,6 +318,7 @@
     },
     {
       "query": "칼코지나이드 태양전지의 defect control 기술 개발 관련 연구를 찾고 있어요.",
+      "abstraction_level": "concrete",
       "source_doc_ids": [
         717,
         1422
@@ -303,7 +330,8 @@
       ]
     },
     {
-      "query": "전기자동차 응용 전자기 시뮬레이션 기술 개발 관련 연구를 찾고 있어요.",
+      "query": "전자기 현상을 시뮬레이션하는 기술 개발 관련 연구를 찾고 있어요.",
+      "abstraction_level": "medium",
       "source_doc_ids": [
         17,
         959
@@ -315,7 +343,8 @@
       ]
     },
     {
-      "query": "금속-유기 골격체 나노입자를 활용한 테라노스틱스 기술 개발 관련 연구를 찾고 있어요.",
+      "query": "나노입자로 질병 진단하고 치료하는 기술 개발 관련 연구를 찾고 있어요.",
+      "abstraction_level": "abstract",
       "source_doc_ids": [
         1494,
         1166
@@ -328,6 +357,7 @@
     },
     {
       "query": "수생생물 건강성 평가를 위한 다차원 오믹스 기술 개발 관련 연구를 찾고 있어요.",
+      "abstraction_level": "concrete",
       "source_doc_ids": [
         184,
         10
@@ -339,7 +369,8 @@
       ]
     },
     {
-      "query": "인간 중심의 스마트 공간 관련 기술 개발 연구를 찾고 있어요.",
+      "query": "사용자에 맞춰 자동 조절되는 건물 기술 개발 연구를 찾고 있어요.",
+      "abstraction_level": "abstract",
       "source_doc_ids": [
         1023,
         563,
@@ -353,7 +384,8 @@
       ]
     },
     {
-      "query": "해양 생태계 변화 관련 기술 개발 연구를 찾고 있어요.",
+      "query": "인간 활동이 바다 환경에 미치는 영향 연구를 찾고 있어요.",
+      "abstraction_level": "medium",
       "source_doc_ids": [
         1569,
         1428
@@ -365,7 +397,8 @@
       ]
     },
     {
-      "query": "심혈관 및 폐혈관 질환 관련 기술 개발 연구를 찾고 있어요.",
+      "query": "혈관 질환 원인 규명 기술 개발 연구를 찾고 있어요.",
+      "abstraction_level": "abstract",
       "source_doc_ids": [
         1646,
         1597
@@ -377,7 +410,8 @@
       ]
     },
     {
-      "query": "광노화 관련 한의학적 기술 개발 연구를 찾고 있어요.",
+      "query": "자외선에 손상된 피부를 한방으로 치료하는 기술 개발 연구를 찾고 있어요.",
+      "abstraction_level": "medium",
       "source_doc_ids": [
         826,
         976
@@ -390,20 +424,20 @@
     },
     {
       "query": "환경 친화적 유산소 산화반응 기술 개발 관련 연구를 찾고 있어요.",
+      "abstraction_level": "concrete",
       "source_doc_ids": [
         1562,
-        804,
         270
       ],
       "data_type": "project",
       "references": [
         "환경 친화적이고 경제적인 선택적 유산소 산화반응 개발",
-        "화학적-물리적 기능을 가진 탄소 껍질을 이용한 반응물 ",
         "하이드라진의 전이 금속 촉진 유산소 산화 반응을 이용하"
       ]
     },
     {
-      "query": "투명 태양전지와 광전화셀 관련 기술 개발 연구를 찾고 있어요.",
+      "query": "빛이 통과하는 태양전지 기술 개발 연구를 찾고 있어요.",
+      "abstraction_level": "medium",
       "source_doc_ids": [
         1164,
         1480
@@ -415,7 +449,8 @@
       ]
     },
     {
-      "query": "실시간 결로 탐지 및 사용자 행동패턴 분석 기술 개발 관련 연구를 찾고 있어요.",
+      "query": "결로 발생 전 미리 감지하는 기술 개발 관련 연구를 찾고 있어요.",
+      "abstraction_level": "abstract",
       "source_doc_ids": [
         1385,
         1483
@@ -427,7 +462,8 @@
       ]
     },
     {
-      "query": "스마트 건설현장 배치계획 관련 기술 개발 연구를 찾고 있어요.",
+      "query": "건설현장 장비와 자재를 자동으로 배치하는 기술 개발 연구를 찾고 있어요.",
+      "abstraction_level": "medium",
       "source_doc_ids": [
         403,
         867
