@@ -4,9 +4,15 @@ Context Relevance + Noise Rate@K 평가 스크립트
 NaiveRetriever (Vector RAG) vs HybridRetriever (GraphRAG) 비교 지원
 """
 
+import asyncio
+import sys
+
+# Windows Event Loop Policy 설정
+if sys.platform == 'win32':
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 import argparse
 import json
-import sys
 from pathlib import Path
 from datetime import datetime
 from typing import Union
@@ -285,122 +291,210 @@ def run_batch_evaluation(
 
 def run_comparison_evaluation(
     queries: list,
-    doc_types: list,
+    _doc_types: list,
     k: int = 5,
     save: bool = True
 ) -> dict:
     """
-    NaiveRetriever vs HybridRetriever 비교 평가 실행
+    NaiveRetriever vs HybridRetriever 비교 평가 실행 (타입별 분리 검색)
 
     Args:
         queries: 쿼리 리스트
-        doc_types: 문서 타입
+        _doc_types: 문서 타입 (사용되지 않음, 항상 3개 타입 개별 평가)
         k: Top-K
         save: 결과 저장 여부
 
     Returns:
         비교 평가 결과
     """
+    doc_type_list = ["patent", "article", "project"]
+
     print(f"\n{'='*70}")
     print("COMPARISON: NaiveRetriever (Vector) vs HybridRetriever (Graph)")
     print(f"{'='*70}")
-    print(f"Doc types: {doc_types}")
+    print(f"Doc types: {doc_type_list} (evaluated separately)")
     print(f"Top-K: {k}")
     print(f"Query count: {len(queries)}")
+    print(f"Total evaluations: {len(queries)} queries × 3 types × 2 retrievers = {len(queries) * 6}")
 
-    # Retriever 초기화
-    print("\nInitializing retrievers...")
-    naive_retriever = NaiveRetriever(doc_types=doc_types)
-    hybrid_retriever = HybridRetriever(doc_types=doc_types)
+    # 각 타입별 Retriever 초기화
+    print("\nInitializing retrievers for each doc type...")
+    retrievers = {}
+    for doc_type in doc_type_list:
+        print(f"  Initializing {doc_type} retrievers...")
+        retrievers[doc_type] = {
+            "naive": NaiveRetriever(doc_types=[doc_type]),
+            "hybrid": HybridRetriever(doc_types=[doc_type])
+        }
 
     # 결과 저장
-    naive_results = []
-    hybrid_results = []
+    results = []
 
-    naive_total_relevance = 0.0
-    naive_total_noise = 0.0
-    hybrid_total_relevance = 0.0
-    hybrid_total_noise = 0.0
+    # 타입별 통계 누적용
+    type_stats = {
+        doc_type: {
+            "naive": {"total_relevance": 0.0, "total_noise": 0.0},
+            "hybrid": {"total_relevance": 0.0, "total_noise": 0.0}
+        }
+        for doc_type in doc_type_list
+    }
 
     for i, query_info in enumerate(queries):
         query_text = query_info["query"] if isinstance(query_info, dict) else query_info
 
         print(f"\n[{i+1}/{len(queries)}] {query_text[:50]}...")
 
-        # NaiveRetriever 평가
-        naive_result = evaluate_single_query(naive_retriever, query_text, k=k, retriever_type="naive")
-        naive_results.append(naive_result)
-        naive_total_relevance += naive_result['context_relevance']
-        naive_total_noise += naive_result['noise_rate']
+        query_result = {"query": query_text}
 
-        # HybridRetriever 평가
-        hybrid_result = evaluate_single_query(hybrid_retriever, query_text, k=k, retriever_type="hybrid")
-        hybrid_results.append(hybrid_result)
-        hybrid_total_relevance += hybrid_result['context_relevance']
-        hybrid_total_noise += hybrid_result['noise_rate']
+        # 각 타입별로 평가
+        for doc_type in doc_type_list:
+            # NaiveRetriever 평가
+            naive_result = evaluate_single_query(
+                retrievers[doc_type]["naive"],
+                query_text,
+                k=k,
+                retriever_type="naive"
+            )
 
-        # 개별 결과 출력
-        print(f"  [Naive]  Relevance: {naive_result['context_relevance']:.3f}, Noise: {naive_result['noise_rate']:.2%}")
-        print(f"  [Hybrid] Relevance: {hybrid_result['context_relevance']:.3f}, Noise: {hybrid_result['noise_rate']:.2%}")
+            # HybridRetriever 평가
+            hybrid_result = evaluate_single_query(
+                retrievers[doc_type]["hybrid"],
+                query_text,
+                k=k,
+                retriever_type="hybrid"
+            )
+
+            # noise_judgment 매핑 (reason만 추출)
+            naive_noise_reasons = {j["doc_id"]: j["reason"] for j in naive_result["noise_judgments"]}
+            hybrid_noise_reasons = {j["doc_id"]: j["reason"] for j in hybrid_result["noise_judgments"]}
+
+            # retrieved_docs에 noise_judgment 추가
+            naive_docs = [
+                {
+                    "doc_id": doc["doc_id"],
+                    "similarity": doc["similarity"],
+                    "content_preview": doc["content_preview"],
+                    "noise_judgment": naive_noise_reasons.get(doc["doc_id"], "")
+                }
+                for doc in naive_result["retrieved_docs"]
+            ]
+
+            hybrid_docs = [
+                {
+                    "doc_id": doc["doc_id"],
+                    "similarity": doc["similarity"],
+                    "content_preview": doc["content_preview"],
+                    "noise_judgment": hybrid_noise_reasons.get(doc["doc_id"], "")
+                }
+                for doc in hybrid_result["retrieved_docs"]
+            ]
+
+            # 결과 저장
+            query_result[doc_type] = {
+                "naive": {
+                    "context_relevance": naive_result["context_relevance"],
+                    "noise_rate": naive_result["noise_rate"],
+                    "retrieved_docs": naive_docs
+                },
+                "hybrid": {
+                    "context_relevance": hybrid_result["context_relevance"],
+                    "noise_rate": hybrid_result["noise_rate"],
+                    "retrieved_docs": hybrid_docs
+                }
+            }
+
+            # 통계 누적
+            type_stats[doc_type]["naive"]["total_relevance"] += naive_result["context_relevance"]
+            type_stats[doc_type]["naive"]["total_noise"] += naive_result["noise_rate"]
+            type_stats[doc_type]["hybrid"]["total_relevance"] += hybrid_result["context_relevance"]
+            type_stats[doc_type]["hybrid"]["total_noise"] += hybrid_result["noise_rate"]
+
+            # 개별 결과 출력
+            print(f"  [{doc_type}] Naive: rel={naive_result['context_relevance']:.3f}, noise={naive_result['noise_rate']:.2%}")
+            print(f"  [{doc_type}] Hybrid: rel={hybrid_result['context_relevance']:.3f}, noise={hybrid_result['noise_rate']:.2%}")
+
+        results.append(query_result)
 
     # 평균 계산
     n = len(queries)
-    naive_avg_relevance = naive_total_relevance / n if n > 0 else 0.0
-    naive_avg_noise = naive_total_noise / n if n > 0 else 0.0
-    hybrid_avg_relevance = hybrid_total_relevance / n if n > 0 else 0.0
-    hybrid_avg_noise = hybrid_total_noise / n if n > 0 else 0.0
+    comparison_summary = {}
+
+    # 타입별 평균 계산
+    for doc_type in doc_type_list:
+        naive_avg_rel = type_stats[doc_type]["naive"]["total_relevance"] / n if n > 0 else 0.0
+        naive_avg_noise = type_stats[doc_type]["naive"]["total_noise"] / n if n > 0 else 0.0
+        hybrid_avg_rel = type_stats[doc_type]["hybrid"]["total_relevance"] / n if n > 0 else 0.0
+        hybrid_avg_noise = type_stats[doc_type]["hybrid"]["total_noise"] / n if n > 0 else 0.0
+
+        comparison_summary[doc_type] = {
+            "naive_retriever": {
+                "avg_context_relevance": naive_avg_rel,
+                "avg_noise_rate": naive_avg_noise
+            },
+            "hybrid_retriever": {
+                "avg_context_relevance": hybrid_avg_rel,
+                "avg_noise_rate": hybrid_avg_noise
+            },
+            "winner": {
+                "context_relevance": "hybrid" if hybrid_avg_rel > naive_avg_rel else "naive" if naive_avg_rel > hybrid_avg_rel else "tie",
+                "noise_rate": "hybrid" if hybrid_avg_noise < naive_avg_noise else "naive" if naive_avg_noise < hybrid_avg_noise else "tie"
+            }
+        }
+
+    # 전체 평균 계산
+    total_naive_rel = sum(comparison_summary[t]["naive_retriever"]["avg_context_relevance"] for t in doc_type_list) / 3
+    total_naive_noise = sum(comparison_summary[t]["naive_retriever"]["avg_noise_rate"] for t in doc_type_list) / 3
+    total_hybrid_rel = sum(comparison_summary[t]["hybrid_retriever"]["avg_context_relevance"] for t in doc_type_list) / 3
+    total_hybrid_noise = sum(comparison_summary[t]["hybrid_retriever"]["avg_noise_rate"] for t in doc_type_list) / 3
+
+    comparison_summary["average"] = {
+        "naive_retriever": {
+            "avg_context_relevance": total_naive_rel,
+            "avg_noise_rate": total_naive_noise
+        },
+        "hybrid_retriever": {
+            "avg_context_relevance": total_hybrid_rel,
+            "avg_noise_rate": total_hybrid_noise
+        },
+        "winner": {
+            "context_relevance": "hybrid" if total_hybrid_rel > total_naive_rel else "naive" if total_naive_rel > total_hybrid_rel else "tie",
+            "noise_rate": "hybrid" if total_hybrid_noise < total_naive_noise else "naive" if total_naive_noise < total_hybrid_noise else "tie"
+        }
+    }
 
     # 결과 구조
     summary = {
         "experiment_info": {
             "timestamp": datetime.now().isoformat(),
-            "mode": "comparison",
-            "doc_types": doc_types,
+            "mode": "comparison_by_type",
             "k": k,
             "query_count": n
         },
-        "comparison_summary": {
-            "naive_retriever": {
-                "avg_context_relevance": naive_avg_relevance,
-                "avg_noise_rate": naive_avg_noise
-            },
-            "hybrid_retriever": {
-                "avg_context_relevance": hybrid_avg_relevance,
-                "avg_noise_rate": hybrid_avg_noise
-            },
-            "difference": {
-                "context_relevance_diff": hybrid_avg_relevance - naive_avg_relevance,
-                "noise_rate_diff": hybrid_avg_noise - naive_avg_noise
-            }
-        },
-        "naive_results": naive_results,
-        "hybrid_results": hybrid_results
+        "comparison_summary": comparison_summary,
+        "results": results
     }
 
     # 결과 출력
     print(f"\n{'='*70}")
-    print("COMPARISON SUMMARY")
+    print("COMPARISON SUMMARY BY DOC TYPE")
     print(f"{'='*70}")
-    print(f"\n{'Metric':<25} {'Naive (Vector)':<18} {'Hybrid (Graph)':<18} {'Diff':<12}")
-    print("-" * 75)
-    print(f"{'Avg Context Relevance':<25} {naive_avg_relevance:<18.3f} {hybrid_avg_relevance:<18.3f} {hybrid_avg_relevance - naive_avg_relevance:+.3f}")
-    print(f"{'Avg Noise Rate@' + str(k):<25} {naive_avg_noise:<18.2%} {hybrid_avg_noise:<18.2%} {hybrid_avg_noise - naive_avg_noise:+.2%}")
-    print("-" * 75)
 
-    # Winner 판정
-    if hybrid_avg_relevance > naive_avg_relevance:
-        print(f"\n[Context Relevance] Winner: Hybrid (+{hybrid_avg_relevance - naive_avg_relevance:.3f})")
-    elif naive_avg_relevance > hybrid_avg_relevance:
-        print(f"\n[Context Relevance] Winner: Naive (+{naive_avg_relevance - hybrid_avg_relevance:.3f})")
-    else:
-        print(f"\n[Context Relevance] Tie")
+    for doc_type in doc_type_list:
+        stats = comparison_summary[doc_type]
+        print(f"\n[{doc_type.upper()}]")
+        print(f"{'Metric':<25} {'Naive':<15} {'Hybrid':<15} {'Winner':<10}")
+        print("-" * 65)
+        print(f"{'Avg Context Relevance':<25} {stats['naive_retriever']['avg_context_relevance']:<15.3f} {stats['hybrid_retriever']['avg_context_relevance']:<15.3f} {stats['winner']['context_relevance']}")
+        print(f"{'Avg Noise Rate@' + str(k):<25} {stats['naive_retriever']['avg_noise_rate']:<15.2%} {stats['hybrid_retriever']['avg_noise_rate']:<15.2%} {stats['winner']['noise_rate']}")
 
-    if hybrid_avg_noise < naive_avg_noise:
-        print(f"[Noise Rate] Winner: Hybrid (-{naive_avg_noise - hybrid_avg_noise:.2%})")
-    elif naive_avg_noise < hybrid_avg_noise:
-        print(f"[Noise Rate] Winner: Naive (-{hybrid_avg_noise - naive_avg_noise:.2%})")
-    else:
-        print(f"[Noise Rate] Tie")
+    print(f"\n{'='*70}")
+    print("OVERALL AVERAGE")
+    print(f"{'='*70}")
+    avg_stats = comparison_summary["average"]
+    print(f"{'Metric':<25} {'Naive':<15} {'Hybrid':<15} {'Winner':<10}")
+    print("-" * 65)
+    print(f"{'Avg Context Relevance':<25} {avg_stats['naive_retriever']['avg_context_relevance']:<15.3f} {avg_stats['hybrid_retriever']['avg_context_relevance']:<15.3f} {avg_stats['winner']['context_relevance']}")
+    print(f"{'Avg Noise Rate@' + str(k):<25} {avg_stats['naive_retriever']['avg_noise_rate']:<15.2%} {avg_stats['hybrid_retriever']['avg_noise_rate']:<15.2%} {avg_stats['winner']['noise_rate']}")
 
     # 결과 저장
     if save:
