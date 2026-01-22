@@ -267,41 +267,43 @@ class HybridRetriever:
         if not merged_results:
             return merged_results
 
-        # 1. doc_id 목록 추출
-        doc_ids = []
+        # 1. (doc_type, doc_id) 쌍 추출
+        doc_keys = []
         for r in merged_results:
             doc_id = r.get('metadata', {}).get('source_doc_id')
-            if doc_id:
-                doc_ids.append(str(doc_id))
+            doc_type = r.get('doc_type')
+            if doc_id and doc_type:
+                doc_keys.append((doc_type, str(doc_id)))
 
-        if not doc_ids:
+        if not doc_keys:
             return merged_results
 
-        # 2. 각 doc_id에 대해 chunk 검색
+        # 2. 각 (doc_type, doc_id)에 대해 해당 컬렉션에서만 chunk 검색
         doc_contents = {}
-        for doc_id in set(doc_ids):
-            for doc_type in self.doc_types:
-                collection_name = f"{doc_type}_chunks"
-                if collection_name not in self.vector_store.collections:
-                    continue
+        for doc_type, doc_id in set(doc_keys):
+            collection_name = f"{doc_type}_chunks"
+            if collection_name not in self.vector_store.collections:
+                continue
 
-                collection = self.vector_store.collections[collection_name]
-                try:
-                    results = collection.get(
-                        where={"doc_id": str(doc_id)},
-                        include=["documents"]
-                    )
-                    if results and results["documents"]:
-                        doc_contents[doc_id] = results["documents"][0]
-                        break
-                except:
-                    pass
+            collection = self.vector_store.collections[collection_name]
+            try:
+                results = collection.get(
+                    where={"doc_id": str(doc_id)},
+                    include=["documents"]
+                )
+                if results and results["documents"]:
+                    # (doc_type, doc_id) 조합을 키로 사용
+                    doc_contents[(doc_type, doc_id)] = results["documents"][0]
+            except:
+                pass
 
         # 3. merged_results에 original_content 추가
         for r in merged_results:
             doc_id = str(r.get('metadata', {}).get('source_doc_id', ''))
-            if doc_id in doc_contents:
-                r['original_content'] = doc_contents[doc_id]
+            doc_type = r.get('doc_type', '')
+            key = (doc_type, doc_id)
+            if key in doc_contents:
+                r['original_content'] = doc_contents[key]
 
         return merged_results
 
