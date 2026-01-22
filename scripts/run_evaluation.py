@@ -103,7 +103,8 @@ def evaluate_single_query(
     retriever: Union[HybridRetriever, NaiveRetriever],
     query: str,
     k: int = 5,
-    retriever_type: str = "hybrid"
+    retriever_type: str = "hybrid",
+    keywords: tuple = None
 ) -> dict:
     """
     단일 쿼리 평가
@@ -113,15 +114,16 @@ def evaluate_single_query(
         query: 평가할 쿼리
         k: Top-K
         retriever_type: "hybrid" 또는 "naive"
+        keywords: 미리 추출된 키워드 튜플 (high_level, low_level). hybrid에서만 사용
 
     Returns:
         평가 결과 딕셔너리
     """
     if retriever_type == "hybrid":
-        # HybridRetriever 검색
-        results = retriever.retrieve(query=query, final_top_k=k)
+        # HybridRetriever 검색 (키워드 전달)
+        results = retriever.retrieve(query=query, final_top_k=k, keywords=keywords)
         top_k_docs = extract_docs_from_hybrid_results(results['merged_results'])
-        keywords = {
+        keywords_dict = {
             "high_level": results.get('high_level_keywords', []),
             "low_level": results.get('low_level_keywords', [])
         }
@@ -129,7 +131,7 @@ def evaluate_single_query(
         # NaiveRetriever 검색
         results = retriever.retrieve(query=query, top_k=k)
         top_k_docs = extract_docs_from_naive_results(results['results'])
-        keywords = None  # NaiveRetriever는 키워드 추출 없음
+        keywords_dict = None  # NaiveRetriever는 키워드 추출 없음
 
     # contexts 추출 (Context Relevance용)
     contexts = [doc['content'] for doc in top_k_docs if doc['content']]
@@ -157,8 +159,8 @@ def evaluate_single_query(
         ]
     }
 
-    if keywords:
-        result["keywords"] = keywords
+    if keywords_dict:
+        result["keywords"] = keywords_dict
 
     return result
 
@@ -346,6 +348,11 @@ def run_comparison_evaluation(
 
         query_result = {"query": query_text}
 
+        # 쿼리당 키워드 1번만 추출 (첫 번째 HybridRetriever 사용)
+        first_hybrid = retrievers[doc_type_list[0]]["hybrid"]
+        extracted_keywords = first_hybrid._extract_keywords(query_text)
+        print(f"  Extracted keywords - High: {extracted_keywords[0]}, Low: {extracted_keywords[1]}")
+
         # 각 타입별로 평가
         for doc_type in doc_type_list:
             # NaiveRetriever 평가
@@ -356,12 +363,13 @@ def run_comparison_evaluation(
                 retriever_type="naive"
             )
 
-            # HybridRetriever 평가
+            # HybridRetriever 평가 (추출된 키워드 재사용)
             hybrid_result = evaluate_single_query(
                 retrievers[doc_type]["hybrid"],
                 query_text,
                 k=k,
-                retriever_type="hybrid"
+                retriever_type="hybrid",
+                keywords=extracted_keywords
             )
 
             # noise_judgment 매핑 (reason만 추출)

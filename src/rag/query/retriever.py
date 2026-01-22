@@ -312,7 +312,8 @@ class HybridRetriever:
         query: str,
         retrieval_top_k: int = None,
         final_top_k: int = None,
-        mode: str = "hybrid"
+        mode: str = "hybrid",
+        keywords: Tuple[List[str], List[str]] = None
     ) -> Dict:
         """
         쿼리에 대한 관련 문서/엔티티 검색
@@ -322,6 +323,7 @@ class HybridRetriever:
             retrieval_top_k: Local/Global 검색 시 각각 가져올 개수 (기본: RETRIEVAL_TOP_K)
             final_top_k: 최종 병합 후 반환할 개수 (기본: FINAL_TOP_K)
             mode: 검색 모드 ("hybrid", "local", "global")
+            keywords: 미리 추출된 키워드 튜플 (high_level, low_level). None이면 내부에서 추출
 
         Returns:
             검색 결과 딕셔너리
@@ -329,8 +331,11 @@ class HybridRetriever:
         retrieval_top_k = retrieval_top_k or RETRIEVAL_TOP_K
         final_top_k = final_top_k or FINAL_TOP_K
 
-        # 1. 키워드 추출
-        high_level_keywords, low_level_keywords = self._extract_keywords(query)
+        # 1. 키워드 추출 (외부에서 전달되면 재사용)
+        if keywords:
+            high_level_keywords, low_level_keywords = keywords
+        else:
+            high_level_keywords, low_level_keywords = self._extract_keywords(query)
 
         # 2. 검색 수행 (retrieval_top_k 사용)
         local_results = []
