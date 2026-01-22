@@ -7,6 +7,7 @@ import argparse
 import json
 import sys
 import logging
+import pickle
 from pathlib import Path
 from typing import List, Dict
 from dataclasses import asdict
@@ -269,30 +270,48 @@ class IndexBuilder:
 
         logger.info(f"GraphStore stats: {self.graph_store.get_stats()}")
 
-    def run(self, data_file: str = None, clear: bool = False):
+    def run(self, data_file: str = None, clear: bool = False, resume: bool = False):
         """전체 파이프라인 실행"""
         logger.info("=" * 50)
         logger.info(f"Starting Index Build for {self.doc_type}")
         logger.info("=" * 50)
 
-        # 기존 데이터 초기화
-        if clear:
-            logger.info("Clearing existing data...")
-            self.vector_store.clear_all()
-            self.graph_store.clear()
+        checkpoint_file = Path(f"data/checkpoint_{self.doc_type}.pkl")
 
-        # 1. 데이터 로드
-        raw_data = self.load_data(data_file)
+        # 체크포인트에서 복원
+        if resume and checkpoint_file.exists():
+            logger.info(f"Resuming from checkpoint: {checkpoint_file}")
+            with open(checkpoint_file, 'rb') as f:
+                checkpoint = pickle.load(f)
+            docs = checkpoint['docs']
+            entities = checkpoint['entities']
+            relations = checkpoint['relations']
+            logger.info(f"Loaded {len(docs)} docs, {len(entities)} entities, {len(relations)} relations")
+        else:
+            # 기존 데이터 초기화
+            if clear:
+                logger.info("Clearing existing data...")
+                self.vector_store.clear_all()
+                self.graph_store.clear()
 
-        # 2. 텍스트 전처리
-        docs = self.process_documents(raw_data)
+            # 1. 데이터 로드
+            raw_data = self.load_data(data_file)
 
-        # 3. 엔티티/관계 추출
-        entities, relations = self.extract_entities_relations(docs)
+            # 2. 텍스트 전처리
+            docs = self.process_documents(raw_data)
 
-        if not entities:
-            logger.warning("No entities extracted. Stopping.")
-            return
+            # 3. 엔티티/관계 추출
+            entities, relations = self.extract_entities_relations(docs)
+
+            if not entities:
+                logger.warning("No entities extracted. Stopping.")
+                return
+
+            # 체크포인트 저장
+            logger.info(f"Saving checkpoint to {checkpoint_file}...")
+            checkpoint_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(checkpoint_file, 'wb') as f:
+                pickle.dump({'docs': docs, 'entities': entities, 'relations': relations}, f)
 
         # 4. 임베딩 생성 (엔티티, 관계, 청크)
         entity_embeddings, relation_embeddings, chunk_embeddings = self.generate_embeddings(
@@ -343,6 +362,11 @@ def main():
         default=False,
         help="Force use OpenAI API for embeddings (default: auto-detect GPU)"
     )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume from checkpoint (skip entity extraction)"
+    )
 
     args = parser.parse_args()
 
@@ -353,7 +377,8 @@ def main():
     )
     builder.run(
         data_file=args.data_file,
-        clear=args.clear
+        clear=args.clear,
+        resume=args.resume
     )
 
 

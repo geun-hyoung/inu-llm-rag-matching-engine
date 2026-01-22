@@ -107,24 +107,34 @@ class Embedder:
             return embeddings[0]
         return embeddings
 
-    def _encode_qwen(self, texts: List[str]) -> np.ndarray:
-        """Qwen3로 임베딩 생성"""
+    def _encode_qwen(self, texts: List[str], batch_size: int = 4) -> np.ndarray:
+        """Qwen3로 임베딩 생성 (배치 처리로 메모리 관리)"""
         import torch
 
-        with torch.no_grad():
-            inputs = self.tokenizer(
-                texts,
-                padding=True,
-                truncation=True,
-                max_length=8192,
-                return_tensors="pt"
-            ).to(self.model.device)
+        all_embeddings = []
 
-            outputs = self.model(**inputs)
-            embeddings = outputs.last_hidden_state.mean(dim=1)
-            embeddings = torch.nn.functional.normalize(embeddings, p=2, dim=1)
+        for i in range(0, len(texts), batch_size):
+            batch_texts = texts[i:i + batch_size]
 
-        return embeddings.cpu().numpy()
+            with torch.no_grad():
+                inputs = self.tokenizer(
+                    batch_texts,
+                    padding=True,
+                    truncation=True,
+                    max_length=8192,
+                    return_tensors="pt"
+                ).to(self.model.device)
+
+                outputs = self.model(**inputs)
+                embeddings = outputs.last_hidden_state.mean(dim=1)
+                embeddings = torch.nn.functional.normalize(embeddings, p=2, dim=1)
+                all_embeddings.append(embeddings.cpu())
+
+            # 메모리 정리
+            del inputs, outputs, embeddings
+            torch.cuda.empty_cache()
+
+        return torch.cat(all_embeddings, dim=0).numpy()
 
     def _encode_openai(self, texts: List[str]) -> np.ndarray:
         """OpenAI API로 임베딩 생성"""
