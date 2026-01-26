@@ -17,7 +17,15 @@ from config.settings import (
 
 
 class Embedder:
-    """임베딩 모델 클래스 - GPU/API 자동 전환"""
+    """임베딩 모델 클래스 - GPU/API 자동 전환 (싱글톤)"""
+
+    _instance = None
+    _initialized = False
+
+    def __new__(cls, force_api: bool = False):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
 
     def __init__(self, force_api: bool = False):
         """
@@ -26,6 +34,10 @@ class Embedder:
         Args:
             force_api: True면 GPU 유무와 관계없이 OpenAI API 사용
         """
+        # 이미 초기화되었으면 스킵
+        if Embedder._initialized:
+            return
+
         self.force_api = force_api
         self.model = None
         self.tokenizer = None
@@ -33,6 +45,7 @@ class Embedder:
         self.use_gpu = False
 
         self._init_model()
+        Embedder._initialized = True
 
     def _init_model(self):
         """환경에 맞는 모델 초기화"""
