@@ -11,6 +11,14 @@ import sys
 if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
+# 종료 시 Event loop closed 경고 무시
+_original_unraisablehook = sys.unraisablehook
+def _suppress_event_loop_closed(unraisable):
+    if "Event loop is closed" in str(unraisable.exc_value):
+        return  # 무시
+    _original_unraisablehook(unraisable)
+sys.unraisablehook = _suppress_event_loop_closed
+
 import argparse
 import json
 from pathlib import Path
