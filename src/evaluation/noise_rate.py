@@ -249,12 +249,24 @@ class NoiseRateEvaluator:
     ) -> NoiseRateResult:
         """
         동기 버전의 Noise Rate 계산
-        (asyncio.run 내부 호출)
+        (기존 이벤트 루프 재사용)
         """
-        return asyncio.run(
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_closed():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        return loop.run_until_complete(
             self.calculate_noise_rate_at_k(query, documents, k)
         )
 
+
+# NoiseRateEvaluator 싱글톤 캐시
+_noise_evaluator_cache = None
 
 def evaluate_noise_rate(
     query: str,
@@ -288,8 +300,13 @@ def evaluate_noise_rate(
         ... )
         >>> print(f"Noise Rate: {result.noise_rate:.2%}")
     """
-    evaluator = NoiseRateEvaluator(api_key=api_key, model=model)
-    return evaluator.calculate_noise_rate_at_k_sync(query, documents, k)
+    global _noise_evaluator_cache
+
+    # 싱글톤 패턴: 동일한 evaluator 재사용
+    if _noise_evaluator_cache is None:
+        _noise_evaluator_cache = NoiseRateEvaluator(api_key=api_key, model=model)
+
+    return _noise_evaluator_cache.calculate_noise_rate_at_k_sync(query, documents, k)
 
 
 if __name__ == "__main__":

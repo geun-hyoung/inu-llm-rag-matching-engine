@@ -30,17 +30,25 @@ except ImportError:
         print("RAGAS not installed. Run: pip install ragas langchain-openai")
 
 
+# 평가용 LLM 싱글톤 캐시
+_evaluator_llm_cache = None
+
 def get_evaluator_llm():
-    """평가용 LLM 초기화"""
+    """평가용 LLM 초기화 (싱글톤)"""
+    global _evaluator_llm_cache
+
     if not RAGAS_AVAILABLE:
         return None
 
-    llm = ChatOpenAI(
-        model="gpt-4o-mini",
-        api_key=OPENAI_API_KEY,
-        temperature=0
-    )
-    return LangchainLLMWrapper(llm)
+    if _evaluator_llm_cache is None:
+        llm = ChatOpenAI(
+            model="gpt-4o-mini",
+            api_key=OPENAI_API_KEY,
+            temperature=0
+        )
+        _evaluator_llm_cache = LangchainLLMWrapper(llm)
+
+    return _evaluator_llm_cache
 
 
 def evaluate_context_relevance(
