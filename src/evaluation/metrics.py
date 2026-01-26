@@ -13,40 +13,32 @@ from config.settings import OPENAI_API_KEY
 # RAGAS 라이브러리 임포트
 try:
     from ragas import evaluate, EvaluationDataset, SingleTurnSample
-    from ragas.metrics._context_relevance import ContextRelevance
-    from ragas.llms import LangchainLLMWrapper
-    from langchain_openai import ChatOpenAI
+    from ragas.metrics import ContextRelevance
+    from ragas.llms import llm_factory
+    from openai import OpenAI
     RAGAS_AVAILABLE = True
 except ImportError:
-    try:
-        # 새로운 API (ragas >= 0.2)
-        from ragas import evaluate, EvaluationDataset, SingleTurnSample
-        from ragas.metrics.collections import ContextRelevance
-        from ragas.llms import LangchainLLMWrapper
-        from langchain_openai import ChatOpenAI
-        RAGAS_AVAILABLE = True
-    except ImportError:
-        RAGAS_AVAILABLE = False
-        print("RAGAS not installed. Run: pip install ragas langchain-openai")
+    RAGAS_AVAILABLE = False
+    print("RAGAS not installed. Run: pip install ragas openai")
 
 
 # 평가용 LLM 싱글톤 캐시
 _evaluator_llm_cache = None
+_openai_client_cache = None
 
 def get_evaluator_llm():
-    """평가용 LLM 초기화 (싱글톤)"""
-    global _evaluator_llm_cache
+    """평가용 LLM 초기화 (싱글톤) - RAGAS 0.4.x API"""
+    global _evaluator_llm_cache, _openai_client_cache
 
     if not RAGAS_AVAILABLE:
         return None
 
     if _evaluator_llm_cache is None:
-        llm = ChatOpenAI(
-            model="gpt-4o-mini",
-            api_key=OPENAI_API_KEY,
-            temperature=0
+        _openai_client_cache = OpenAI(api_key=OPENAI_API_KEY)
+        _evaluator_llm_cache = llm_factory(
+            "gpt-4o-mini",
+            client=_openai_client_cache
         )
-        _evaluator_llm_cache = LangchainLLMWrapper(llm)
 
     return _evaluator_llm_cache
 
