@@ -60,7 +60,7 @@ def extract_docs_from_hybrid_results(merged_results: list) -> list:
         merged_results: HybridRetriever의 merged_results
 
     Returns:
-        [{"doc_id": str, "content": str, "similarity": float}, ...]
+        [{"doc_id": str, "content": str, "similarity": float, "match_info": dict}, ...]
     """
     docs = []
     for r in merged_results:
@@ -69,11 +69,32 @@ def extract_docs_from_hybrid_results(merged_results: list) -> list:
         content = r.get('original_content') or r.get('document', '')
         similarity = r.get('similarity', 0)
 
+        # 매칭 정보 추출
+        search_type = r.get('search_type', '')
+        metadata = r.get('metadata', {})
+
+        match_info = {
+            "search_type": search_type
+        }
+
+        if search_type == "local":
+            # 엔티티 매칭 정보
+            match_info["matched_entity"] = metadata.get('name', '')
+            match_info["entity_type"] = metadata.get('entity_type', '')
+        elif search_type == "global":
+            # 관계 매칭 정보
+            match_info["matched_relation"] = {
+                "source": metadata.get('source_entity', ''),
+                "target": metadata.get('target_entity', ''),
+                "keywords": metadata.get('keywords', '')
+            }
+
         if doc_id:
             docs.append({
                 'doc_id': str(doc_id),
                 'content': content,
-                'similarity': similarity
+                'similarity': similarity,
+                'match_info': match_info
             })
 
     return docs
@@ -150,6 +171,19 @@ def evaluate_single_query(
     # Noise Rate@K 평가
     noise_result = evaluate_noise_rate(query, top_k_docs, k=k)
 
+    # retrieved_docs 생성 (hybrid면 match_info 포함)
+    retrieved_docs = []
+    for doc in top_k_docs:
+        doc_info = {
+            "doc_id": doc['doc_id'],
+            "similarity": doc['similarity'],
+            "content_preview": doc['content'][:200] + "..." if len(doc['content']) > 200 else doc['content']
+        }
+        # hybrid일 때만 match_info 추가
+        if retriever_type == "hybrid" and 'match_info' in doc:
+            doc_info["match_info"] = doc['match_info']
+        retrieved_docs.append(doc_info)
+
     result = {
         "query": query,
         "retriever_type": retriever_type,
@@ -157,14 +191,7 @@ def evaluate_single_query(
         "noise_rate": noise_result.noise_rate,
         "noise_judgments": [j.to_dict() for j in noise_result.judgments],
         "retrieved_count": len(top_k_docs),
-        "retrieved_docs": [
-            {
-                "doc_id": doc['doc_id'],
-                "similarity": doc['similarity'],
-                "content_preview": doc['content'][:200] + "..." if len(doc['content']) > 200 else doc['content']
-            }
-            for doc in top_k_docs
-        ]
+        "retrieved_docs": retrieved_docs
     }
 
     if keywords_dict:
@@ -354,12 +381,18 @@ def run_comparison_evaluation(
 
         print(f"\n[{i+1}/{len(queries)}] {query_text[:50]}...")
 
-        query_result = {"query": query_text}
-
         # 쿼리당 키워드 1번만 추출 (첫 번째 HybridRetriever 사용)
         first_hybrid = retrievers[doc_type_list[0]]["hybrid"]
         extracted_keywords = first_hybrid._extract_keywords(query_text)
         print(f"  Extracted keywords - High: {extracted_keywords[0]}, Low: {extracted_keywords[1]}")
+
+        query_result = {
+            "query": query_text,
+            "extracted_keywords": {
+                "high_level": extracted_keywords[0],
+                "low_level": extracted_keywords[1]
+            }
+        }
 
         # 각 타입별로 평가
         for doc_type in doc_type_list:
@@ -400,6 +433,7 @@ def run_comparison_evaluation(
                     "doc_id": doc["doc_id"],
                     "similarity": doc["similarity"],
                     "content_preview": doc["content_preview"],
+                    "match_info": doc.get("match_info", {}),
                     "noise_judgment": hybrid_noise_reasons.get(doc["doc_id"], "")
                 }
                 for doc in hybrid_result["retrieved_docs"]

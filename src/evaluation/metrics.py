@@ -1,9 +1,10 @@
 """
 Context Relevance 평가 모듈
-RAGAS 라이브러리 기반 Retrieval 평가
+RAGAS 0.4.x 기반 Retrieval 평가
 """
 
 import sys
+import asyncio
 from pathlib import Path
 from typing import List, Dict
 
@@ -12,32 +13,33 @@ from config.settings import OPENAI_API_KEY
 
 # RAGAS 라이브러리 임포트
 try:
-    from ragas import evaluate, EvaluationDataset, SingleTurnSample
-    from ragas.metrics import ContextRelevance
+    from openai import AsyncOpenAI
     from ragas.llms import llm_factory
-    from openai import OpenAI
+    from ragas.metrics import ContextRelevance
     RAGAS_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     RAGAS_AVAILABLE = False
-    print("RAGAS not installed. Run: pip install ragas openai")
+    print(f"RAGAS import error: {e}")
+    print("Run: pip install ragas openai")
 
 
 # 평가용 LLM 싱글톤 캐시
 _evaluator_llm_cache = None
-_openai_client_cache = None
+_async_client_cache = None
+
 
 def get_evaluator_llm():
     """평가용 LLM 초기화 (싱글톤) - RAGAS 0.4.x API"""
-    global _evaluator_llm_cache, _openai_client_cache
+    global _evaluator_llm_cache, _async_client_cache
 
     if not RAGAS_AVAILABLE:
         return None
 
     if _evaluator_llm_cache is None:
-        _openai_client_cache = OpenAI(api_key=OPENAI_API_KEY)
+        _async_client_cache = AsyncOpenAI(api_key=OPENAI_API_KEY)
         _evaluator_llm_cache = llm_factory(
             "gpt-4o-mini",
-            client=_openai_client_cache
+            client=_async_client_cache
         )
 
     return _evaluator_llm_cache
@@ -73,33 +75,40 @@ def evaluate_context_relevance(
         return 0.0
 
     try:
-        evaluator_llm = get_evaluator_llm()
+        return asyncio.run(_evaluate_context_relevance_async(query, contexts))
+    except RuntimeError as e:
+        # 이미 이벤트 루프가 실행 중인 경우
+        if "cannot be called from a running event loop" in str(e):
+            loop = asyncio.get_event_loop()
+            return loop.run_until_complete(
+                _evaluate_context_relevance_async(query, contexts)
+            )
+        raise
 
-        sample = SingleTurnSample(
+
+async def _evaluate_context_relevance_async(
+    query: str,
+    contexts: List[str]
+) -> float:
+    """비동기 Context Relevance 평가"""
+    try:
+        evaluator_llm = get_evaluator_llm()
+        metric = ContextRelevance(llm=evaluator_llm)
+
+        result = await metric.ascore(
             user_input=query,
             retrieved_contexts=contexts
         )
 
-        metric = ContextRelevance(llm=evaluator_llm)
-        dataset = EvaluationDataset(samples=[sample])
+        # MetricResult에서 값 추출
+        if hasattr(result, 'value'):
+            score = float(result.value)
+        else:
+            score = float(result)
 
-        result = evaluate(
-            dataset=dataset,
-            metrics=[metric],
-            llm=evaluator_llm
-        )
-
-        df = result.to_pandas()
-
-        # Context Relevance 컬럼명 확인
-        relevance_cols = [col for col in df.columns if 'relevance' in col.lower() or 'context' in col.lower()]
-        if relevance_cols:
-            score = float(df[relevance_cols[0]].iloc[0])
-            if score != score:  # NaN 처리
-                return 0.0
-            return score
-
-        return 0.0
+        if score != score:  # NaN 처리
+            return 0.0
+        return score
 
     except Exception as e:
         print(f"Context Relevance evaluation error: {e}")
@@ -141,39 +150,47 @@ def evaluate_context_relevance_batch(
         return [_fallback_context_relevance(s["query"], s["contexts"]) for s in samples]
 
     try:
+        return asyncio.run(_evaluate_batch_async(samples))
+    except RuntimeError as e:
+        if "cannot be called from a running event loop" in str(e):
+            loop = asyncio.get_event_loop()
+            return loop.run_until_complete(_evaluate_batch_async(samples))
+        raise
+
+
+async def _evaluate_batch_async(samples: List[Dict]) -> List[float]:
+    """비동기 배치 평가"""
+    try:
         evaluator_llm = get_evaluator_llm()
-
-        ragas_samples = []
-        for s in samples:
-            ragas_samples.append(SingleTurnSample(
-                user_input=s["query"],
-                retrieved_contexts=s["contexts"]
-            ))
-
-        dataset = EvaluationDataset(samples=ragas_samples)
         metric = ContextRelevance(llm=evaluator_llm)
 
-        result = evaluate(
-            dataset=dataset,
-            metrics=[metric],
-            llm=evaluator_llm
-        )
+        tasks = [
+            metric.ascore(
+                user_input=s["query"],
+                retrieved_contexts=s["contexts"]
+            )
+            for s in samples
+        ]
 
-        df = result.to_pandas()
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
         scores = []
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                print(f"Sample {i} error: {result}")
+                scores.append(_fallback_context_relevance(
+                    samples[i]["query"],
+                    samples[i]["contexts"]
+                ))
+            else:
+                if hasattr(result, 'value'):
+                    score = float(result.value)
+                else:
+                    score = float(result)
 
-        # Context Relevance 컬럼명 확인
-        relevance_cols = [col for col in df.columns if 'relevance' in col.lower() or 'context' in col.lower()]
-        col_name = relevance_cols[0] if relevance_cols else None
-
-        for i in range(len(df)):
-            if col_name and col_name in df.columns:
-                score = float(df[col_name].iloc[i])
                 if score != score:  # NaN
                     score = 0.0
                 scores.append(score)
-            else:
-                scores.append(0.0)
 
         return scores
 
