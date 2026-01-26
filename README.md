@@ -21,7 +21,19 @@ This project collects industry-academia knowledge information for university mem
 3. **RAG System**
    - Text embedding generation
    - Vector store for similarity search
-   - RAG engine for retrieval-augmented generation
+   - Hybrid retrieval (Local + Global search)
+   - Graph-based knowledge expansion
+
+4. **AHP-based Ranking System** 🆕
+   - Professor document aggregation by data type
+   - AHP (Analytic Hierarchy Process) algorithm
+   - Multi-criteria professor ranking
+   - Configurable weights for patent/article/project
+
+5. **Report Generation** 🆕
+   - Industry-academia matching recommendation reports
+   - Multiple output formats (JSON, PDF, HTML)
+   - Detailed professor information and matching rationale
 
 ## Project Structure
 
@@ -30,28 +42,54 @@ inu-llm-rag-matching-engine/
 ├── data/                    # Data storage directory
 │   ├── article/             # Article data
 │   ├── patent/              # Patent data
+│   ├── project/              # Project data
 │   ├── processed/           # Processed data (embeddings)
-│   └── rag_store/           # RAG vector store
+│   ├── rag_store/           # RAG vector store
+│   ├── test/                # Test data (filtered)
+│   └── train/               # Training data (filtered)
 ├── data_collection/         # Data collection scripts
 │   ├── article_collection.py
-│   └── patent_collection.py
+│   ├── patent_collection.py
+│   └── project_collection.py
 ├── data_exploration/        # Data exploration scripts
-│   └── patent_eda.py
+│   ├── patent_eda.py
+│   ├── article_eda.py
+│   └── project_eda.py
+├── data_filtering/          # Data filtering and preprocessing
+│   ├── article_filtering.py
+│   ├── patent_filtering.py
+│   ├── project_filtering.py
+│   └── text_preprocessing.py
 ├── src/                     # Core source code
 │   ├── rag/                 # RAG system modules
-│   │   ├── engine.py        # RAG engine
-│   │   ├── vector_store.py  # Vector store
-│   │   └── retriever.py     # Retriever
-│   ├── embedding/           # Embedding modules
-│   │   ├── encoder.py       # Text encoder
-│   │   └── model.py         # Embedding model
-│   └── utils/               # Utility functions
-│       └── helpers.py
+│   │   ├── embedding/       # Embedding modules
+│   │   ├── index/           # Entity extraction
+│   │   ├── preprocessing/   # Text preprocessing
+│   │   ├── query/           # Retrieval modules
+│   │   ├── store/           # Vector & Graph stores
+│   │   └── prompts.py       # LLM prompts
+│   ├── ranking/             # 🆕 AHP-based ranking system
+│   │   ├── professor_aggregator.py  # Professor document aggregation
+│   │   ├── ahp.py           # AHP algorithm implementation
+│   │   └── ranker.py        # Professor ranking
+│   ├── reporting/           # 🆕 Report generation
+│   │   ├── report_generator.py
+│   │   └── templates/       # Report templates
+│   └── evaluation/          # Evaluation metrics
+│       ├── metrics.py
+│       └── noise_rate.py
+├── scripts/                 # Execution scripts
+│   ├── build_index.py       # Index building pipeline
+│   ├── query.py             # Simple query execution
+│   ├── match.py             # 🆕 Full matching pipeline (RAG + AHP + Report)
+│   └── run_evaluation.py    # Evaluation execution
 ├── config/                  # Configuration files
 │   ├── database.py          # Database connection settings
-│   └── settings.py          # Project settings
+│   ├── settings.py          # Project settings
+│   └── ahp_config.py        # 🆕 AHP weights and configuration
 ├── results/                 # Analysis results
-│   └── eda/                 # EDA results
+│   ├── eda/                 # EDA results
+│   └── reports/             # 🆕 Generated reports
 ├── .gitignore
 ├── requirements.txt
 └── README.md
@@ -90,31 +128,67 @@ python data_collection/article_collection.py
 ### Data Exploration
 ```bash
 python data_exploration/patent_eda.py
+python data_exploration/article_eda.py
+python data_exploration/project_eda.py
 ```
 
-### RAG System
-```python
-from src.rag.engine import RAGEngine
-from src.rag.vector_store import VectorStore
-from src.embedding.encoder import Embedder
-
-# Initialize components
-store = VectorStore()
-embedder = Embedder()
-rag = RAGEngine(store, embedder)
-
-# Add documents
-documents = [...]
-rag.add_documents(documents)
-
-# Query
-results = rag.query("search query", top_k=5)
+### RAG System (Simple Query)
+```bash
+python scripts/query.py "딥러닝 의료영상 전문가" --doc-types patent article project
 ```
+
+### Full Matching Pipeline 🆕
+```bash
+# RAG 검색 → 교수 집계 → AHP 랭킹 → 보고서 생성
+python scripts/match.py "딥러닝 의료영상 전문가" \
+    --doc-types patent article project \
+    --top-n 10 \
+    --output-format json
+```
+
+### Index Building
+```bash
+python scripts/build_index.py --doc-type patent
+python scripts/build_index.py --doc-type article
+python scripts/build_index.py --doc-type project
+```
+
+### Evaluation
+```bash
+python scripts/run_evaluation.py --retriever hybrid
+```
+
+## Workflow
+
+### Complete Pipeline Flow
+
+1. **Data Collection** → Collect patent/article/project data with professor information
+2. **Data Processing** → Filter and preprocess data
+3. **Index Building** → Extract entities/relations and build vector/graph stores
+4. **Query Processing** → User query → RAG retrieval (3 data types)
+5. **Professor Aggregation** → Aggregate documents by professor for each data type
+6. **AHP Ranking** → Calculate professor scores using AHP algorithm
+7. **Report Generation** → Generate matching recommendation report
+
+### Key Features
+
+- **Hybrid Retrieval**: Combines local (entity-based) and global (relation-based) search
+- **Multi-type Support**: Handles patent, article, and project data simultaneously
+- **AHP-based Ranking**: Uses Analytic Hierarchy Process for multi-criteria decision making
+- **Professor-centric**: All documents are mapped to professors for matching
 
 ## Development Environment
 
-- Python 3.11
+- Python 3.11.9
 - See `requirements.txt` for required packages
+
+## Recent Updates 🆕
+
+- Added AHP-based ranking system (`src/ranking/`)
+- Added report generation module (`src/reporting/`)
+- Added integrated matching pipeline (`scripts/match.py`)
+- Enhanced EDA with abstract analysis and visualization
+- Added AHP configuration (`config/ahp_config.py`)
 
 ## License
 
