@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from openai import OpenAI
 
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
-from config.settings import OPENAI_API_KEY, LLM_MODEL, RETRIEVAL_TOP_K, FINAL_TOP_K
+from config.settings import OPENAI_API_KEY, LLM_MODEL, RETRIEVAL_TOP_K, SIMILARITY_THRESHOLD
 from src.rag.prompts import format_keyword_extraction_prompt, RAG_RESPONSE_PROMPT
 from src.rag.embedding.embedder import Embedder
 from src.rag.store.vector_store import ChromaVectorStore
@@ -208,19 +208,22 @@ class HybridRetriever:
         self,
         local_results: List[Dict],
         global_results: List[Dict],
-        top_k: int = 10
+        similarity_threshold: float = None
     ) -> List[Dict]:
         """
-        Local/Global 결과 병합 (dedup + similarity 정렬)
+        Local/Global 결과 병합 (dedup + similarity 임계값 필터링)
 
         Args:
             local_results: Local Search 결과
             global_results: Global Search 결과
-            top_k: 최종 반환할 결과 수
+            similarity_threshold: similarity 임계값 (이 값 이상만 반환)
 
         Returns:
-            병합된 결과 리스트 (doc_id 기준 dedup, similarity 내림차순)
+            병합된 결과 리스트 (doc_id 기준 dedup, similarity 내림차순, 임계값 이상만)
         """
+        if similarity_threshold is None:
+            similarity_threshold = SIMILARITY_THRESHOLD
+
         # 1. 전체 결과 합치기
         all_results = local_results + global_results
 
@@ -245,8 +248,10 @@ class HybridRetriever:
         deduped = list(doc_map.values())
         deduped.sort(key=lambda x: x.get('similarity', 0), reverse=True)
 
-        # 4. Top-K 자르기
-        return deduped[:top_k]
+        # 4. similarity 임계값 필터링 (top-k 대신)
+        filtered = [r for r in deduped if r.get('similarity', 0) >= similarity_threshold]
+
+        return filtered
 
     def _enrich_with_original_content(
         self,
@@ -311,7 +316,7 @@ class HybridRetriever:
         self,
         query: str,
         retrieval_top_k: int = None,
-        final_top_k: int = None,
+        similarity_threshold: float = None,
         mode: str = "hybrid",
         keywords: Tuple[List[str], List[str]] = None
     ) -> Dict:
@@ -321,7 +326,7 @@ class HybridRetriever:
         Args:
             query: 사용자 쿼리
             retrieval_top_k: Local/Global 검색 시 각각 가져올 개수 (기본: RETRIEVAL_TOP_K)
-            final_top_k: 최종 병합 후 반환할 개수 (기본: FINAL_TOP_K)
+            similarity_threshold: similarity 임계값 (기본: SIMILARITY_THRESHOLD)
             mode: 검색 모드 ("hybrid", "local", "global")
             keywords: 미리 추출된 키워드 튜플 (high_level, low_level). None이면 내부에서 추출
 
@@ -329,7 +334,7 @@ class HybridRetriever:
             검색 결과 딕셔너리
         """
         retrieval_top_k = retrieval_top_k or RETRIEVAL_TOP_K
-        final_top_k = final_top_k or FINAL_TOP_K
+        similarity_threshold = similarity_threshold if similarity_threshold is not None else SIMILARITY_THRESHOLD
 
         # 1. 키워드 추출 (외부에서 전달되면 재사용)
         if keywords:
@@ -347,13 +352,13 @@ class HybridRetriever:
         if mode in ("hybrid", "global"):
             global_results = self._global_search(high_level_keywords, top_k=retrieval_top_k)
 
-        # 3. 결과 병합 (final_top_k 사용)
+        # 3. 결과 병합 (similarity_threshold 기반 필터링)
         if mode == "hybrid":
-            merged_results = self._merge_results(local_results, global_results, final_top_k)
+            merged_results = self._merge_results(local_results, global_results, similarity_threshold)
         elif mode == "local":
-            merged_results = local_results[:final_top_k]
+            merged_results = [r for r in local_results if r.get('similarity', 0) >= similarity_threshold]
         else:
-            merged_results = global_results[:final_top_k]
+            merged_results = [r for r in global_results if r.get('similarity', 0) >= similarity_threshold]
 
         # 4. 원본 chunk content 추가 (평가용)
         merged_results = self._enrich_with_original_content(merged_results)
@@ -365,7 +370,8 @@ class HybridRetriever:
             "local_results": local_results,
             "global_results": global_results,
             "merged_results": merged_results,
-            "mode": mode
+            "mode": mode,
+            "similarity_threshold": similarity_threshold
         }
 
     def _format_context(self, results: List[Dict]) -> str:
