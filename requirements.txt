@@ -26,7 +26,8 @@ langchain-openai>=0.1.0
 lightrag-hku>=1.4.9
 
 # RAG Evaluation
-ragas>=0.2.0
+ragas==0.4.3
+langchain-openai==1.1.7
 
 # Vector DB
 chromadb>=1.4.0
