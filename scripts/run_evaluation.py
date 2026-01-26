@@ -266,7 +266,7 @@ def run_batch_evaluation(
     # 평가 실행
     all_results = []
     total_relevance = 0.0
-    total_noise_rate = 0.0
+    noise_rates = []  # None이 아닌 noise_rate만 수집
 
     for i, query_info in enumerate(queries):
         query_text = query_info["query"] if isinstance(query_info, dict) else query_info
@@ -277,15 +277,20 @@ def run_batch_evaluation(
         all_results.append(result)
 
         total_relevance += result['context_relevance']
-        total_noise_rate += result['noise_rate']
 
-        print(f"  Context Relevance: {result['context_relevance']:.3f}")
-        print(f"  Noise Rate@{k}: {result['noise_rate']:.2%}")
+        # noise_rate가 None이 아닌 경우만 수집 (문서 0개면 평가 제외)
+        if result['noise_rate'] is not None:
+            noise_rates.append(result['noise_rate'])
+            print(f"  Context Relevance: {result['context_relevance']:.3f}")
+            print(f"  Noise Rate@{k}: {result['noise_rate']:.2%}")
+        else:
+            print(f"  Context Relevance: {result['context_relevance']:.3f}")
+            print(f"  Noise Rate@{k}: N/A (검색된 문서 없음)")
 
     # 평균 계산
     n = len(queries)
     avg_relevance = total_relevance / n if n > 0 else 0.0
-    avg_noise_rate = total_noise_rate / n if n > 0 else 0.0
+    avg_noise_rate = sum(noise_rates) / len(noise_rates) if noise_rates else None
 
     # 결과 구조
     summary = {
@@ -308,7 +313,10 @@ def run_batch_evaluation(
     print(f"EVALUATION SUMMARY ({retriever_type.upper()})")
     print(f"{'='*60}")
     print(f"  Avg Context Relevance: {avg_relevance:.3f}")
-    print(f"  Avg Noise Rate@{k}: {avg_noise_rate:.2%}")
+    if avg_noise_rate is not None:
+        print(f"  Avg Noise Rate@{k}: {avg_noise_rate:.2%}")
+    else:
+        print(f"  Avg Noise Rate@{k}: N/A (평가 가능한 쿼리 없음)")
 
     # 결과 저장
     if save:
@@ -370,8 +378,8 @@ def run_comparison_evaluation(
     # 타입별 통계 누적용
     type_stats = {
         doc_type: {
-            "naive": {"total_relevance": 0.0, "total_noise": 0.0},
-            "hybrid": {"total_relevance": 0.0, "total_noise": 0.0}
+            "naive": {"total_relevance": 0.0, "noise_rates": []},
+            "hybrid": {"total_relevance": 0.0, "noise_rates": []}
         }
         for doc_type in doc_type_list
     }
@@ -455,13 +463,19 @@ def run_comparison_evaluation(
 
             # 통계 누적
             type_stats[doc_type]["naive"]["total_relevance"] += naive_result["context_relevance"]
-            type_stats[doc_type]["naive"]["total_noise"] += naive_result["noise_rate"]
             type_stats[doc_type]["hybrid"]["total_relevance"] += hybrid_result["context_relevance"]
-            type_stats[doc_type]["hybrid"]["total_noise"] += hybrid_result["noise_rate"]
+
+            # noise_rate가 None이 아닌 경우만 수집
+            if naive_result["noise_rate"] is not None:
+                type_stats[doc_type]["naive"]["noise_rates"].append(naive_result["noise_rate"])
+            if hybrid_result["noise_rate"] is not None:
+                type_stats[doc_type]["hybrid"]["noise_rates"].append(hybrid_result["noise_rate"])
 
             # 개별 결과 출력
-            print(f"  [{doc_type}] Naive: rel={naive_result['context_relevance']:.3f}, noise={naive_result['noise_rate']:.2%}")
-            print(f"  [{doc_type}] Hybrid: rel={hybrid_result['context_relevance']:.3f}, noise={hybrid_result['noise_rate']:.2%}")
+            naive_noise_str = f"{naive_result['noise_rate']:.2%}" if naive_result['noise_rate'] is not None else "N/A"
+            hybrid_noise_str = f"{hybrid_result['noise_rate']:.2%}" if hybrid_result['noise_rate'] is not None else "N/A"
+            print(f"  [{doc_type}] Naive: rel={naive_result['context_relevance']:.3f}, noise={naive_noise_str}")
+            print(f"  [{doc_type}] Hybrid: rel={hybrid_result['context_relevance']:.3f}, noise={hybrid_noise_str}")
 
         results.append(query_result)
 
@@ -472,9 +486,23 @@ def run_comparison_evaluation(
     # 타입별 평균 계산
     for doc_type in doc_type_list:
         naive_avg_rel = type_stats[doc_type]["naive"]["total_relevance"] / n if n > 0 else 0.0
-        naive_avg_noise = type_stats[doc_type]["naive"]["total_noise"] / n if n > 0 else 0.0
         hybrid_avg_rel = type_stats[doc_type]["hybrid"]["total_relevance"] / n if n > 0 else 0.0
-        hybrid_avg_noise = type_stats[doc_type]["hybrid"]["total_noise"] / n if n > 0 else 0.0
+
+        # noise_rate 평균 (None 제외)
+        naive_noise_rates = type_stats[doc_type]["naive"]["noise_rates"]
+        hybrid_noise_rates = type_stats[doc_type]["hybrid"]["noise_rates"]
+        naive_avg_noise = sum(naive_noise_rates) / len(naive_noise_rates) if naive_noise_rates else None
+        hybrid_avg_noise = sum(hybrid_noise_rates) / len(hybrid_noise_rates) if hybrid_noise_rates else None
+
+        # winner 결정 (None 처리)
+        if naive_avg_noise is None and hybrid_avg_noise is None:
+            noise_winner = "N/A"
+        elif naive_avg_noise is None:
+            noise_winner = "hybrid"
+        elif hybrid_avg_noise is None:
+            noise_winner = "naive"
+        else:
+            noise_winner = "hybrid" if hybrid_avg_noise < naive_avg_noise else "naive" if naive_avg_noise < hybrid_avg_noise else "tie"
 
         comparison_summary[doc_type] = {
             "naive_retriever": {
@@ -487,15 +515,30 @@ def run_comparison_evaluation(
             },
             "winner": {
                 "context_relevance": "hybrid" if hybrid_avg_rel > naive_avg_rel else "naive" if naive_avg_rel > hybrid_avg_rel else "tie",
-                "noise_rate": "hybrid" if hybrid_avg_noise < naive_avg_noise else "naive" if naive_avg_noise < hybrid_avg_noise else "tie"
+                "noise_rate": noise_winner
             }
         }
 
-    # 전체 평균 계산
-    total_naive_rel = sum(comparison_summary[t]["naive_retriever"]["avg_context_relevance"] for t in doc_type_list) / 3
-    total_naive_noise = sum(comparison_summary[t]["naive_retriever"]["avg_noise_rate"] for t in doc_type_list) / 3
-    total_hybrid_rel = sum(comparison_summary[t]["hybrid_retriever"]["avg_context_relevance"] for t in doc_type_list) / 3
-    total_hybrid_noise = sum(comparison_summary[t]["hybrid_retriever"]["avg_noise_rate"] for t in doc_type_list) / 3
+    # 전체 평균 계산 (None 값 제외)
+    total_naive_rel = sum(comparison_summary[t]["naive_retriever"]["avg_context_relevance"] for t in doc_type_list) / len(doc_type_list)
+
+    naive_noise_values = [comparison_summary[t]["naive_retriever"]["avg_noise_rate"] for t in doc_type_list if comparison_summary[t]["naive_retriever"]["avg_noise_rate"] is not None]
+    total_naive_noise = sum(naive_noise_values) / len(naive_noise_values) if naive_noise_values else None
+
+    total_hybrid_rel = sum(comparison_summary[t]["hybrid_retriever"]["avg_context_relevance"] for t in doc_type_list) / len(doc_type_list)
+
+    hybrid_noise_values = [comparison_summary[t]["hybrid_retriever"]["avg_noise_rate"] for t in doc_type_list if comparison_summary[t]["hybrid_retriever"]["avg_noise_rate"] is not None]
+    total_hybrid_noise = sum(hybrid_noise_values) / len(hybrid_noise_values) if hybrid_noise_values else None
+
+    # noise_rate winner 계산 (None 처리)
+    if total_naive_noise is None and total_hybrid_noise is None:
+        total_noise_winner = "N/A"
+    elif total_naive_noise is None:
+        total_noise_winner = "hybrid"
+    elif total_hybrid_noise is None:
+        total_noise_winner = "naive"
+    else:
+        total_noise_winner = "hybrid" if total_hybrid_noise < total_naive_noise else "naive" if total_naive_noise < total_hybrid_noise else "tie"
 
     comparison_summary["average"] = {
         "naive_retriever": {
@@ -508,7 +551,7 @@ def run_comparison_evaluation(
         },
         "winner": {
             "context_relevance": "hybrid" if total_hybrid_rel > total_naive_rel else "naive" if total_naive_rel > total_hybrid_rel else "tie",
-            "noise_rate": "hybrid" if total_hybrid_noise < total_naive_noise else "naive" if total_naive_noise < total_hybrid_noise else "tie"
+            "noise_rate": total_noise_winner
         }
     }
 
@@ -529,22 +572,30 @@ def run_comparison_evaluation(
     print("COMPARISON SUMMARY BY DOC TYPE")
     print(f"{'='*70}")
 
+    def format_noise_rate(val):
+        """None이면 'N/A', 아니면 퍼센트 포맷"""
+        return "N/A" if val is None else f"{val:.2%}"
+
     for doc_type in doc_type_list:
         stats = comparison_summary[doc_type]
+        naive_noise_str = format_noise_rate(stats['naive_retriever']['avg_noise_rate'])
+        hybrid_noise_str = format_noise_rate(stats['hybrid_retriever']['avg_noise_rate'])
         print(f"\n[{doc_type.upper()}]")
         print(f"{'Metric':<25} {'Naive':<15} {'Hybrid':<15} {'Winner':<10}")
         print("-" * 65)
         print(f"{'Avg Context Relevance':<25} {stats['naive_retriever']['avg_context_relevance']:<15.3f} {stats['hybrid_retriever']['avg_context_relevance']:<15.3f} {stats['winner']['context_relevance']}")
-        print(f"{'Avg Noise Rate@' + str(k):<25} {stats['naive_retriever']['avg_noise_rate']:<15.2%} {stats['hybrid_retriever']['avg_noise_rate']:<15.2%} {stats['winner']['noise_rate']}")
+        print(f"{'Avg Noise Rate@' + str(k):<25} {naive_noise_str:<15} {hybrid_noise_str:<15} {stats['winner']['noise_rate']}")
 
     print(f"\n{'='*70}")
     print("OVERALL AVERAGE")
     print(f"{'='*70}")
     avg_stats = comparison_summary["average"]
+    avg_naive_noise_str = format_noise_rate(avg_stats['naive_retriever']['avg_noise_rate'])
+    avg_hybrid_noise_str = format_noise_rate(avg_stats['hybrid_retriever']['avg_noise_rate'])
     print(f"{'Metric':<25} {'Naive':<15} {'Hybrid':<15} {'Winner':<10}")
     print("-" * 65)
     print(f"{'Avg Context Relevance':<25} {avg_stats['naive_retriever']['avg_context_relevance']:<15.3f} {avg_stats['hybrid_retriever']['avg_context_relevance']:<15.3f} {avg_stats['winner']['context_relevance']}")
-    print(f"{'Avg Noise Rate@' + str(k):<25} {avg_stats['naive_retriever']['avg_noise_rate']:<15.2%} {avg_stats['hybrid_retriever']['avg_noise_rate']:<15.2%} {avg_stats['winner']['noise_rate']}")
+    print(f"{'Avg Noise Rate@' + str(k):<25} {avg_naive_noise_str:<15} {avg_hybrid_noise_str:<15} {avg_stats['winner']['noise_rate']}")
 
     # 결과 저장
     if save:

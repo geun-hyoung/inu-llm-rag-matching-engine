@@ -83,7 +83,7 @@ class NoiseJudgment:
 @dataclass
 class NoiseRateResult:
     """Noise Rate@K 평가 결과"""
-    noise_rate: float
+    noise_rate: Optional[float]  # None이면 평가 제외 (문서 0개)
     k: int
     noise_count: int
     non_noise_count: int
@@ -100,6 +100,9 @@ class NoiseRateResult:
 
     def summary(self) -> str:
         """결과 요약 문자열"""
+        if self.noise_rate is None:
+            return f"Noise Rate@{self.k}: N/A (검색된 문서 없음)"
+
         lines = [
             f"Noise Rate@{self.k}: {self.noise_rate:.2%}",
             f"  - Noise: {self.noise_count}개",
@@ -208,9 +211,10 @@ class NoiseRateEvaluator:
         actual_k = len(top_k_docs)
 
         if actual_k == 0:
+            # 문서가 없으면 평가 제외 (N/A)
             return NoiseRateResult(
-                noise_rate=1.0,
-                k=k,
+                noise_rate=None,  # 평가 불가
+                k=0,
                 noise_count=0,
                 non_noise_count=0,
                 judgments=[]
