@@ -120,14 +120,25 @@ def main():
             print(f"    {i}. {prof_id}: {score:.4f}")
     print("✓ AHP 랭킹 완료\n")
     
-    # 4. 보고서 생성
+    # 4. AHP 결과 형식으로 변환
+    from config.ahp_config import DEFAULT_TYPE_WEIGHTS
+    from datetime import datetime
+    
+    ahp_results = {
+        "query": args.query,
+        "keywords": rag_results.get("keywords", {}),
+        "timestamp": datetime.now().strftime("%Y%m%d_%H%M%S"),
+        "total_professors": len(ranked_professors),
+        "type_weights": DEFAULT_TYPE_WEIGHTS,
+        "ranked_professors": ranked_professors
+    }
+    
+    # 5. 보고서 생성
     print("[4/4] 보고서 생성 중...")
     report_gen = ReportGenerator(output_dir=args.output_dir)
     report_data = report_gen.generate_report(
-        query=args.query,
-        ranked_professors=ranked_professors,
-        rag_results=rag_results,
-        top_n=args.top_n
+        ahp_results=ahp_results,
+        rag_results=rag_results
     )
     
     # 보고서 저장
