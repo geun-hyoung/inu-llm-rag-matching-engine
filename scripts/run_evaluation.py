@@ -150,7 +150,7 @@ def evaluate_single_query(
     """
     if retriever_type == "hybrid":
         # HybridRetriever 검색 (키워드 전달)
-        results = retriever.retrieve(query=query, final_top_k=k, keywords=keywords)
+        results = retriever.retrieve(query=query, retrieval_top_k=k, keywords=keywords)
         top_k_docs = extract_docs_from_hybrid_results(results['merged_results'])
         keywords_dict = {
             "high_level": results.get('high_level_keywords', []),
