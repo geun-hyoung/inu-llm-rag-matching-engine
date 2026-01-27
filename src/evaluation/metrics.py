@@ -16,6 +16,7 @@ try:
     from openai import AsyncOpenAI
     from ragas.llms import llm_factory
     from ragas.metrics import ContextRelevance
+    from ragas.dataset_schema import SingleTurnSample
     RAGAS_AVAILABLE = True
 except ImportError as e:
     RAGAS_AVAILABLE = False
@@ -90,15 +91,17 @@ async def _evaluate_context_relevance_async(
     query: str,
     contexts: List[str]
 ) -> float:
-    """비동기 Context Relevance 평가"""
+    """비동기 Context Relevance 평가 (RAGAS 0.4.x API)"""
     try:
         evaluator_llm = get_evaluator_llm()
         metric = ContextRelevance(llm=evaluator_llm)
 
-        result = await metric.ascore(
+        # RAGAS 0.4.x: SingleTurnSample + single_turn_ascore 사용
+        sample = SingleTurnSample(
             user_input=query,
             retrieved_contexts=contexts
         )
+        result = await metric.single_turn_ascore(sample)
 
         # MetricResult에서 값 추출
         if hasattr(result, 'value'):
@@ -159,15 +162,18 @@ def evaluate_context_relevance_batch(
 
 
 async def _evaluate_batch_async(samples: List[Dict]) -> List[float]:
-    """비동기 배치 평가"""
+    """비동기 배치 평가 (RAGAS 0.4.x API)"""
     try:
         evaluator_llm = get_evaluator_llm()
         metric = ContextRelevance(llm=evaluator_llm)
 
+        # RAGAS 0.4.x: SingleTurnSample + single_turn_ascore 사용
         tasks = [
-            metric.ascore(
-                user_input=s["query"],
-                retrieved_contexts=s["contexts"]
+            metric.single_turn_ascore(
+                SingleTurnSample(
+                    user_input=s["query"],
+                    retrieved_contexts=s["contexts"]
+                )
             )
             for s in samples
         ]
