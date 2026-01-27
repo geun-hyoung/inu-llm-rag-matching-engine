@@ -165,7 +165,9 @@ def filter_project_data(projects: List[Dict]) -> tuple:
                 'RCH_ST_DT': project.get('RCH_ST_DT'),
                 'excel_base_year': project.get('excel_기준년도'),
                 'excel_project_name_kr': project.get('excel_과제명(국문)'),
-                'excel_expected_effect_summary': project.get('excel_기대효과요약')
+                'excel_expected_effect_summary': project.get('excel_기대효과요약'),
+                'excel_연구목표요약': project.get('excel_연구목표요약'),  # EDA 분석을 위해 추가
+                'excel_연구내용요약': project.get('excel_연구내용요약')  # EDA 분석을 위해 추가
             }
         }
         

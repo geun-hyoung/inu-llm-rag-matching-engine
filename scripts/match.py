@@ -12,7 +12,6 @@ sys.path.append(str(Path(__file__).parent.parent))
 from src.rag.query.retriever import HybridRetriever
 from src.ranking.professor_aggregator import ProfessorAggregator
 from src.ranking.ranker import ProfessorRanker
-from src.ranking.ahp import AHPCalculator
 from src.reporting.report_generator import ReportGenerator
 from config.settings import RETRIEVAL_TOP_K, FINAL_TOP_K
 

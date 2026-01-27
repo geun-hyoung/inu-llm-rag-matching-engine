@@ -362,6 +362,84 @@ def analyze_abstract_detailed(data: List[Dict]) -> Dict[str, Any]:
     }
 
 
+def analyze_metadata(data: List[Dict]) -> Dict[str, Any]:
+    """metadata 분석 (AHP를 위한 정보 수집)"""
+    if not data:
+        return {}
+    
+    # 참여 구분 (THSS_PATICP_GBN) 분석
+    participation_dist = defaultdict(int)
+    participation_by_professor = defaultdict(set)
+    
+    # 학술지 구분 (JRNL_GBN) 분석
+    journal_dist = defaultdict(int)
+    journal_by_professor = defaultdict(set)
+    
+    # 교수별 metadata 통계
+    professor_metadata = defaultdict(lambda: {
+        'participation_types': set(),
+        'journal_types': set(),
+        'total_articles': 0
+    })
+    
+    for item in data:
+        metadata = item.get("metadata", {})
+        prof_info = item.get("professor_info", {})
+        
+        if prof_info:
+            prof_id = str(prof_info.get("SQ", "")) or str(prof_info.get("EMP_NO", ""))
+        else:
+            prof_id = None
+        
+        # 참여 구분 분석
+        participation = metadata.get("THSS_PATICP_GBN", "")
+        if participation:
+            participation_dist[participation] += 1
+            if prof_id:
+                participation_by_professor[participation].add(prof_id)
+                professor_metadata[prof_id]['participation_types'].add(participation)
+        
+        # 학술지 구분 분석
+        journal = metadata.get("JRNL_GBN", "")
+        if journal:
+            journal_dist[journal] += 1
+            if prof_id:
+                journal_by_professor[journal].add(prof_id)
+                professor_metadata[prof_id]['journal_types'].add(journal)
+        
+        if prof_id:
+            professor_metadata[prof_id]['total_articles'] += 1
+    
+    # 교수별 metadata 요약
+    prof_metadata_summary = {}
+    for prof_id, info in professor_metadata.items():
+        prof_metadata_summary[prof_id] = {
+            'total_articles': info['total_articles'],
+            'participation_types_count': len(info['participation_types']),
+            'journal_types_count': len(info['journal_types']),
+            'participation_types': list(info['participation_types']),
+            'journal_types': list(info['journal_types'])
+        }
+    
+    return {
+        "participation_distribution": dict(sorted(participation_dist.items(), key=lambda x: x[1], reverse=True)),
+        "participation_by_professor_count": {
+            k: len(v) for k, v in sorted(participation_by_professor.items(), key=lambda x: len(x[1]), reverse=True)
+        },
+        "journal_distribution": dict(sorted(journal_dist.items(), key=lambda x: x[1], reverse=True)),
+        "journal_by_professor_count": {
+            k: len(v) for k, v in sorted(journal_by_professor.items(), key=lambda x: len(x[1]), reverse=True)
+        },
+        "professor_metadata_summary": prof_metadata_summary,
+        "total_with_metadata": len([item for item in data if item.get("metadata")]),
+        "metadata_completeness": {
+            "has_participation": len([item for item in data if item.get("metadata", {}).get("THSS_PATICP_GBN")]),
+            "has_journal": len([item for item in data if item.get("metadata", {}).get("JRNL_GBN")]),
+            "has_both": len([item for item in data if item.get("metadata", {}).get("THSS_PATICP_GBN") and item.get("metadata", {}).get("JRNL_GBN")])
+        }
+    }
+
+
 def visualize_abstract_distribution(data: List[Dict], output_dir: Path):
     """초록 길이 분포 시각화 - 간단하고 트렌드한 학술적 스타일"""
     if not data:
@@ -1002,7 +1080,8 @@ def main():
         "content": analyze_article_content(data),
         "professor_completeness": analyze_professor_info_completeness(data),
         "college_department": analyze_college_department_articles(data),
-        "abstract_detailed": analyze_abstract_detailed(data)
+        "abstract_detailed": analyze_abstract_detailed(data),
+        "metadata_analysis": analyze_metadata(data)
     }
     
     # RAG 텍스트 분석 (text)

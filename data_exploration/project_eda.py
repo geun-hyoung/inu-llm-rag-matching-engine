@@ -87,8 +87,9 @@ def analyze_professor_project_relationship(data: List[Dict]) -> Dict[str, Any]:
             professor_project_count[prof_id] += 1
             professor_info_map[prof_id] = prof_info
             
-            # 연구비 합계
-            amount = item.get("TOT_RND_AMT", 0)
+            # 연구비 합계 (필터링된 데이터에서는 metadata 안에 있음)
+            metadata = item.get("metadata", {})
+            amount = metadata.get("TOT_RND_AMT", 0) if metadata else 0
             if isinstance(amount, (int, float)) and amount > 0:
                 professor_total_amount[prof_id] += float(amount)
         
@@ -148,7 +149,10 @@ def analyze_project_amount(data: List[Dict]) -> Dict[str, Any]:
     amount_by_professor = defaultdict(list)
     
     for item in data:
-        amount = item.get("TOT_RND_AMT", 0)
+        # 필터링된 데이터에서는 metadata 안에 TOT_RND_AMT가 있음
+        metadata = item.get("metadata", {})
+        amount = metadata.get("TOT_RND_AMT", 0) if metadata else 0
+        
         if isinstance(amount, (int, float)) and amount > 0:
             amounts.append(float(amount))
             
@@ -219,8 +223,14 @@ def analyze_project_timeline(data: List[Dict]) -> Dict[str, Any]:
     professor_years = defaultdict(set)
     
     for item in data:
-        base_year = item.get("excel_base_year")
-        start_date = item.get("RCH_ST_DT", "")
+        # 필터링된 데이터에서는 metadata 안에 있거나 표준화된 year 필드 사용
+        metadata = item.get("metadata", {})
+        base_year = metadata.get("excel_base_year") if metadata else None
+        if base_year is None:
+            # 표준화된 year 필드 확인
+            base_year = item.get("year")
+        
+        start_date = metadata.get("RCH_ST_DT", "") if metadata else ""
         prof_info = item.get("professor_info", {})
         
         if base_year:
@@ -232,8 +242,8 @@ def analyze_project_timeline(data: List[Dict]) -> Dict[str, Any]:
                 base_year_professors[year_str].add(prof_id)
                 professor_years[prof_id].add(year_str)
         
-        if start_date and len(start_date) >= 4:
-            year = start_date[:4]
+        if start_date and len(str(start_date)) >= 4:
+            year = str(start_date)[:4]
             start_date_projects[year] += 1
             
             prof_id = str(prof_info.get("SQ", "")) or str(prof_info.get("EMP_NO", "")) if prof_info else ""
@@ -277,19 +287,26 @@ def analyze_project_content(data: List[Dict]) -> Dict[str, Any]:
     effects = []
     
     for item in data:
-        title = item.get("PRJ_NM", "") or item.get("excel_project_name_kr", "")
-        objective = item.get("excel_research_objective_summary", "")
-        content = item.get("excel_research_content_summary", "")
-        effect = item.get("excel_expected_effect_summary", "")
+        # 필터링된 데이터에서는 표준화된 title 필드 사용
+        title = item.get("title", "")
+        # metadata에서 추가 정보 확인
+        metadata = item.get("metadata", {})
+        if not title and metadata:
+            title = metadata.get("excel_project_name_kr", "")
+        
+        # 연구목표와 연구내용은 metadata에서 가져옴 (필터링 스크립트에서 저장됨)
+        objective = metadata.get("excel_연구목표요약", "") if metadata else ""
+        content = metadata.get("excel_연구내용요약", "") if metadata else ""
+        effect = metadata.get("excel_expected_effect_summary", "") if metadata else ""
         
         if title:
             titles.append(title)
-        if objective and objective.strip():
-            objectives.append(objective)
-        if content and content.strip():
-            contents.append(content)
-        if effect and effect.strip():
-            effects.append(effect)
+        if objective and str(objective).strip():
+            objectives.append(str(objective).strip())
+        if content and str(content).strip():
+            contents.append(str(content).strip())
+        if effect and str(effect).strip():
+            effects.append(str(effect).strip())
     
     # 길이 분석
     title_lengths = [len(t) for t in titles]
@@ -355,7 +372,9 @@ def visualize_amount_distribution(data: List[Dict], output_dir: Path):
     
     amounts = []
     for item in data:
-        amount = item.get("TOT_RND_AMT", 0)
+        # 필터링된 데이터에서는 metadata 안에 TOT_RND_AMT가 있음
+        metadata = item.get("metadata", {})
+        amount = metadata.get("TOT_RND_AMT", 0) if metadata else 0
         if isinstance(amount, (int, float)) and amount > 0:
             amounts.append(float(amount) / 1_000_000)  # 백만원 단위로 변환
     
@@ -411,6 +430,172 @@ def visualize_amount_distribution(data: List[Dict], output_dir: Path):
     plt.close()
     
     print(f"[연구비 분포 시각화 저장 완료] {output_path}")
+
+
+def analyze_metadata(data: List[Dict]) -> Dict[str, Any]:
+    """metadata 분석 (AHP를 위한 정보 수집)"""
+    if not data:
+        return {}
+    
+    # 책임자 사번 (PRJ_RSPR_EMP_ID) 분석
+    responsible_emp_dist = defaultdict(int)
+    responsible_by_professor = defaultdict(set)
+    
+    # 총 연구개발 금액 (TOT_RND_AMT) 분석 (이미 analyze_project_amount에 있지만 metadata 관점에서 추가)
+    amount_distribution = []
+    amount_by_professor = defaultdict(list)
+    
+    # 연구 시작일자 (RCH_ST_DT) 분석
+    start_years = []
+    start_year_dist = defaultdict(int)
+    
+    # 기준년도 (excel_base_year) 분석
+    base_years = []
+    base_year_dist = defaultdict(int)
+    
+    # 기대효과요약 (excel_expected_effect_summary) 존재 여부
+    has_expected_effect = 0
+    
+    # 교수별 metadata 통계
+    professor_metadata = defaultdict(lambda: {
+        'responsible_projects': 0,
+        'total_amount': 0,
+        'start_years': [],
+        'base_years': [],
+        'projects_with_expected_effect': 0
+    })
+    
+    for item in data:
+        metadata = item.get("metadata", {})
+        prof_info = item.get("professor_info", {})
+        
+        if prof_info:
+            prof_id = str(prof_info.get("SQ", "")) or str(prof_info.get("EMP_NO", ""))
+        else:
+            prof_id = None
+        
+        # 책임자 사번 분석
+        responsible_emp = metadata.get("PRJ_RSPR_EMP_ID", "")
+        if responsible_emp:
+            responsible_emp_dist[str(responsible_emp)] += 1
+            if prof_id:
+                responsible_by_professor[str(responsible_emp)].add(prof_id)
+                # 책임자인 경우 카운트
+                if str(responsible_emp) == prof_id:
+                    professor_metadata[prof_id]['responsible_projects'] += 1
+        
+        # 총 연구개발 금액 분석
+        amount = metadata.get("TOT_RND_AMT")
+        if amount is not None:
+            try:
+                amount_val = float(amount)
+                if amount_val >= 0:
+                    amount_distribution.append(amount_val)
+                    if prof_id:
+                        amount_by_professor[prof_id].append(amount_val)
+                        professor_metadata[prof_id]['total_amount'] += amount_val
+            except (ValueError, TypeError):
+                pass
+        
+        # 연구 시작일자 분석
+        start_date = metadata.get("RCH_ST_DT", "")
+        if start_date:
+            date_str = str(start_date).strip()
+            # yyyymmdd 형식에서 연도 추출
+            if len(date_str) >= 4 and date_str[:4].isdigit():
+                year = int(date_str[:4])
+                if 1900 <= year <= 2100:
+                    start_years.append(year)
+                    start_year_dist[year] += 1
+                    if prof_id:
+                        professor_metadata[prof_id]['start_years'].append(year)
+        
+        # 기준년도 분석
+        base_year = metadata.get("excel_base_year")
+        if base_year is not None:
+            try:
+                year = int(base_year) if isinstance(base_year, (int, float)) else int(str(base_year).strip())
+                if 1900 <= year <= 2100:
+                    base_years.append(year)
+                    base_year_dist[year] += 1
+                    if prof_id:
+                        professor_metadata[prof_id]['base_years'].append(year)
+            except (ValueError, TypeError):
+                pass
+        
+        # 기대효과요약 존재 여부
+        expected_effect = metadata.get("excel_expected_effect_summary", "")
+        if expected_effect and str(expected_effect).strip():
+            has_expected_effect += 1
+            if prof_id:
+                professor_metadata[prof_id]['projects_with_expected_effect'] += 1
+    
+    # 교수별 metadata 요약
+    prof_metadata_summary = {}
+    for prof_id, info in professor_metadata.items():
+        start_years_list = info['start_years']
+        base_years_list = info['base_years']
+        amounts = amount_by_professor.get(prof_id, [])
+        
+        prof_metadata_summary[prof_id] = {
+            'responsible_projects': info['responsible_projects'],
+            'total_projects': info.get('total_projects', 0),  # 이건 별도로 계산 필요
+            'total_amount': info['total_amount'],
+            'average_amount': sum(amounts) / len(amounts) if amounts else 0,
+            'min_amount': min(amounts) if amounts else None,
+            'max_amount': max(amounts) if amounts else None,
+            'start_years': sorted(set(start_years_list)) if start_years_list else [],
+            'base_years': sorted(set(base_years_list)) if base_years_list else [],
+            'earliest_start_year': min(start_years_list) if start_years_list else None,
+            'latest_start_year': max(start_years_list) if start_years_list else None,
+            'projects_with_expected_effect': info['projects_with_expected_effect']
+        }
+    
+    # 금액 통계
+    amount_stats = {}
+    if amount_distribution:
+        amount_stats = {
+            "min": min(amount_distribution),
+            "max": max(amount_distribution),
+            "mean": sum(amount_distribution) / len(amount_distribution),
+            "median": sorted(amount_distribution)[len(amount_distribution)//2],
+            "total": sum(amount_distribution)
+        }
+    
+    return {
+        "responsible_emp_distribution": dict(sorted(responsible_emp_dist.items(), key=lambda x: x[1], reverse=True)[:20]),  # 상위 20개만
+        "responsible_by_professor_count": {
+            k: len(v) for k, v in sorted(responsible_by_professor.items(), key=lambda x: len(x[1]), reverse=True)[:20]
+        },
+        "amount_statistics": amount_stats,
+        "start_year_distribution": dict(sorted(start_year_dist.items())),
+        "start_year_stats": {
+            "min": min(start_years) if start_years else None,
+            "max": max(start_years) if start_years else None,
+            "mean": sum(start_years) / len(start_years) if start_years else None,
+            "median": sorted(start_years)[len(start_years)//2] if start_years else None
+        },
+        "base_year_distribution": dict(sorted(base_year_dist.items())),
+        "base_year_stats": {
+            "min": min(base_years) if base_years else None,
+            "max": max(base_years) if base_years else None,
+            "mean": sum(base_years) / len(base_years) if base_years else None,
+            "median": sorted(base_years)[len(base_years)//2] if base_years else None
+        },
+        "expected_effect_summary": {
+            "total_with_expected_effect": has_expected_effect,
+            "percentage": (has_expected_effect / len(data) * 100) if data else 0
+        },
+        "professor_metadata_summary": prof_metadata_summary,
+        "total_with_metadata": len([item for item in data if item.get("metadata")]),
+        "metadata_completeness": {
+            "has_responsible_emp": len([item for item in data if item.get("metadata", {}).get("PRJ_RSPR_EMP_ID")]),
+            "has_amount": len([item for item in data if item.get("metadata", {}).get("TOT_RND_AMT")]),
+            "has_start_date": len([item for item in data if item.get("metadata", {}).get("RCH_ST_DT")]),
+            "has_base_year": len([item for item in data if item.get("metadata", {}).get("excel_base_year")]),
+            "has_expected_effect": len([item for item in data if item.get("metadata", {}).get("excel_expected_effect_summary")])
+        }
+    }
 
 
 def visualize_summary_distribution(data: List[Dict], output_dir: Path):
@@ -741,7 +926,9 @@ def analyze_college_department_projects(data: List[Dict]) -> Dict[str, Any]:
         college = prof_info.get("COLG_NM", "")
         department = prof_info.get("HG_NM", "")
         prof_id = str(prof_info.get("SQ", "")) or str(prof_info.get("EMP_NO", ""))
-        amount = item.get("TOT_RND_AMT", 0)
+        # 필터링된 데이터에서는 metadata 안에 TOT_RND_AMT가 있음
+        metadata = item.get("metadata", {})
+        amount = metadata.get("TOT_RND_AMT", 0) if metadata else 0
         if isinstance(amount, (int, float)):
             amount = float(amount)
         else:
@@ -1003,7 +1190,8 @@ def main():
         "timeline": analyze_project_timeline(data),
         "content": analyze_project_content(data),
         "professor_completeness": analyze_professor_info_completeness(data),
-        "college_department": analyze_college_department_projects(data)
+        "college_department": analyze_college_department_projects(data),
+        "metadata_analysis": analyze_metadata(data)
     }
     
     # RAG 텍스트 분석 (text)

@@ -335,6 +335,114 @@ def analyze_abstract_detailed(data: List[Dict]) -> Dict[str, Any]:
     }
 
 
+def analyze_metadata(data: List[Dict]) -> Dict[str, Any]:
+    """metadata 분석 (AHP를 위한 정보 수집)"""
+    if not data:
+        return {}
+    
+    # 발명 구분 (tech_invnt_se) 분석
+    invention_type_dist = defaultdict(int)
+    invention_type_by_professor = defaultdict(set)
+    
+    # 등록 상태 (kipris_register_status) 분석
+    register_status_dist = defaultdict(int)
+    register_status_by_professor = defaultdict(set)
+    
+    # 출원일자 (kipris_application_date) 분석
+    application_years = []
+    application_year_dist = defaultdict(int)
+    
+    # 교수별 metadata 통계
+    professor_metadata = defaultdict(lambda: {
+        'invention_types': set(),
+        'register_statuses': set(),
+        'total_patents': 0,
+        'application_years': []
+    })
+    
+    for item in data:
+        metadata = item.get("metadata", {})
+        prof_info = item.get("professor_info", {})
+        
+        if prof_info:
+            prof_id = str(prof_info.get("SQ", "")) or str(prof_info.get("EMP_NO", ""))
+        else:
+            prof_id = None
+        
+        # 발명 구분 분석
+        invention_type = metadata.get("tech_invnt_se", "")
+        if invention_type:
+            invention_type_dist[invention_type] += 1
+            if prof_id:
+                invention_type_by_professor[invention_type].add(prof_id)
+                professor_metadata[prof_id]['invention_types'].add(invention_type)
+        
+        # 등록 상태 분석
+        register_status = metadata.get("kipris_register_status", "")
+        if register_status:
+            register_status_dist[register_status] += 1
+            if prof_id:
+                register_status_by_professor[register_status].add(prof_id)
+                professor_metadata[prof_id]['register_statuses'].add(register_status)
+        
+        # 출원일자 분석
+        application_date = metadata.get("kipris_application_date", "")
+        if application_date:
+            date_str = str(application_date).strip()
+            # yyyymmdd 형식에서 연도 추출
+            if len(date_str) >= 4 and date_str[:4].isdigit():
+                year = int(date_str[:4])
+                if 1900 <= year <= 2100:
+                    application_years.append(year)
+                    application_year_dist[year] += 1
+                    if prof_id:
+                        professor_metadata[prof_id]['application_years'].append(year)
+        
+        if prof_id:
+            professor_metadata[prof_id]['total_patents'] += 1
+    
+    # 교수별 metadata 요약
+    prof_metadata_summary = {}
+    for prof_id, info in professor_metadata.items():
+        years = info['application_years']
+        prof_metadata_summary[prof_id] = {
+            'total_patents': info['total_patents'],
+            'invention_types_count': len(info['invention_types']),
+            'register_statuses_count': len(info['register_statuses']),
+            'invention_types': list(info['invention_types']),
+            'register_statuses': list(info['register_statuses']),
+            'application_years': sorted(set(years)) if years else [],
+            'earliest_application_year': min(years) if years else None,
+            'latest_application_year': max(years) if years else None
+        }
+    
+    return {
+        "invention_type_distribution": dict(sorted(invention_type_dist.items(), key=lambda x: x[1], reverse=True)),
+        "invention_type_by_professor_count": {
+            k: len(v) for k, v in sorted(invention_type_by_professor.items(), key=lambda x: len(x[1]), reverse=True)
+        },
+        "register_status_distribution": dict(sorted(register_status_dist.items(), key=lambda x: x[1], reverse=True)),
+        "register_status_by_professor_count": {
+            k: len(v) for k, v in sorted(register_status_by_professor.items(), key=lambda x: len(x[1]), reverse=True)
+        },
+        "application_year_distribution": dict(sorted(application_year_dist.items())),
+        "application_year_stats": {
+            "min": min(application_years) if application_years else None,
+            "max": max(application_years) if application_years else None,
+            "mean": sum(application_years) / len(application_years) if application_years else None,
+            "median": sorted(application_years)[len(application_years)//2] if application_years else None
+        },
+        "professor_metadata_summary": prof_metadata_summary,
+        "total_with_metadata": len([item for item in data if item.get("metadata")]),
+        "metadata_completeness": {
+            "has_invention_type": len([item for item in data if item.get("metadata", {}).get("tech_invnt_se")]),
+            "has_register_status": len([item for item in data if item.get("metadata", {}).get("kipris_register_status")]),
+            "has_application_date": len([item for item in data if item.get("metadata", {}).get("kipris_application_date")]),
+            "has_all": len([item for item in data if item.get("metadata", {}).get("tech_invnt_se") and item.get("metadata", {}).get("kipris_register_status") and item.get("metadata", {}).get("kipris_application_date")])
+        }
+    }
+
+
 def visualize_abstract_distribution(data: List[Dict], output_dir: Path):
     """텍스트 길이 분포 시각화 - 간단하고 트렌드한 학술적 스타일"""
     if not data:
@@ -1208,7 +1316,8 @@ def main():
         "register_number": analyze_register_number(data),
         "title_detailed": analyze_title_detailed(data),
         "professor_yearly_activity": analyze_professor_yearly_activity(data),
-        "status_year_relationship": analyze_status_year_relationship(data)
+        "status_year_relationship": analyze_status_year_relationship(data),
+        "metadata_analysis": analyze_metadata(data)
     }
     print("[분석 완료] 모든 EDA 분석 완료")
     
