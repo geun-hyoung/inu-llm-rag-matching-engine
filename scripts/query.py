@@ -29,15 +29,16 @@ def save_query_result(result: dict):
 
     # local_results 처리
     for r in result['local_results']:
-        doc_id = str(r.get('metadata', {}).get('source_doc_id', ''))
-        if not doc_id:
+        no = str(r.get('metadata', {}).get('source_doc_id', ''))
+        if not no:
             continue
 
         doc_type = r.get('doc_type', 'unknown')
 
-        if doc_id not in retrieved_docs:
-            retrieved_docs[doc_id] = {
-                "doc_type": doc_type,
+        if no not in retrieved_docs:
+            retrieved_docs[no] = {
+                "no": no,
+                "data_type": doc_type,
                 "matches": []
             }
 
@@ -60,19 +61,20 @@ def save_query_result(result: dict):
                 for n in r.get('neighbors', [])
             ]
         }
-        retrieved_docs[doc_id]["matches"].append(match_info)
+        retrieved_docs[no]["matches"].append(match_info)
 
     # global_results 처리
     for r in result['global_results']:
-        doc_id = str(r.get('metadata', {}).get('source_doc_id', ''))
-        if not doc_id:
+        no = str(r.get('metadata', {}).get('source_doc_id', ''))
+        if not no:
             continue
 
         doc_type = r.get('doc_type', 'unknown')
 
-        if doc_id not in retrieved_docs:
-            retrieved_docs[doc_id] = {
-                "doc_type": doc_type,
+        if no not in retrieved_docs:
+            retrieved_docs[no] = {
+                "no": no,
+                "data_type": doc_type,
                 "matches": []
             }
 
@@ -89,7 +91,7 @@ def save_query_result(result: dict):
             "source_entity_info": r.get('source_entity_info'),
             "target_entity_info": r.get('target_entity_info')
         }
-        retrieved_docs[doc_id]["matches"].append(match_info)
+        retrieved_docs[no]["matches"].append(match_info)
 
     # JSON 구조 생성
     output = {
