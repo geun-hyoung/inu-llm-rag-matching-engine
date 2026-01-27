@@ -24,8 +24,8 @@ def save_query_result(result: dict):
     filepath = Path(RESULTS_DIR) / "test" / "rag" / "test_rag.json"
     filepath.parent.mkdir(parents=True, exist_ok=True)
 
-    # 문서별로 매칭 정보 구성
-    retrieved_docs = {}
+    # 문서별로 매칭 정보 구성 (임시 dict → 최종 list 변환)
+    docs_dict = {}
 
     # local_results 처리
     for r in result['local_results']:
@@ -35,8 +35,8 @@ def save_query_result(result: dict):
 
         doc_type = r.get('doc_type', 'unknown')
 
-        if no not in retrieved_docs:
-            retrieved_docs[no] = {
+        if no not in docs_dict:
+            docs_dict[no] = {
                 "no": no,
                 "data_type": doc_type,
                 "matches": []
@@ -61,7 +61,7 @@ def save_query_result(result: dict):
                 for n in r.get('neighbors', [])
             ]
         }
-        retrieved_docs[no]["matches"].append(match_info)
+        docs_dict[no]["matches"].append(match_info)
 
     # global_results 처리
     for r in result['global_results']:
@@ -71,8 +71,8 @@ def save_query_result(result: dict):
 
         doc_type = r.get('doc_type', 'unknown')
 
-        if no not in retrieved_docs:
-            retrieved_docs[no] = {
+        if no not in docs_dict:
+            docs_dict[no] = {
                 "no": no,
                 "data_type": doc_type,
                 "matches": []
@@ -91,7 +91,23 @@ def save_query_result(result: dict):
             "source_entity_info": r.get('source_entity_info'),
             "target_entity_info": r.get('target_entity_info')
         }
-        retrieved_docs[no]["matches"].append(match_info)
+        docs_dict[no]["matches"].append(match_info)
+
+    # matches 내부도 similarity 기준 내림차순 정렬
+    for doc in docs_dict.values():
+        doc['matches'] = sorted(
+            doc['matches'],
+            key=lambda m: m.get('similarity', 0),
+            reverse=True
+        )
+
+    # dict → list 변환 후 similarity 기준 내림차순 정렬
+    # 각 문서의 최고 similarity로 정렬
+    retrieved_docs = sorted(
+        docs_dict.values(),
+        key=lambda doc: max((m.get('similarity', 0) for m in doc['matches']), default=0),
+        reverse=True
+    )
 
     # JSON 구조 생성
     output = {
