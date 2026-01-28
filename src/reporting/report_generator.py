@@ -74,13 +74,16 @@ class ReportGenerator:
         # 1. RAG 검색
         print("RAG 검색 수행 중...")
         retriever = HybridRetriever(doc_types=doc_types)
-        rag_results = retriever.retrieve(
+        raw_rag_results = retriever.retrieve(
             query=query,
             retrieval_top_k=retrieval_top_k or RETRIEVAL_TOP_K,
             final_top_k=final_top_k or FINAL_TOP_K,
             mode="hybrid"
         )
-        
+
+        # RAG 결과를 test_rag.json 형식으로 변환 (엔티티/관계 정보 보존)
+        rag_results = self._convert_rag_results(raw_rag_results)
+
         # 2. 교수별 집계
         print("교수별 문서 집계 중...")
         aggregator = ProfessorAggregator()
@@ -162,6 +165,107 @@ class ReportGenerator:
         
         return report_data
     
+    def _convert_rag_results(self, raw_results: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        HybridRetriever 결과를 test_rag.json 형식으로 변환
+        (query.py의 save_query_result 로직과 동일)
+
+        Args:
+            raw_results: HybridRetriever.retrieve() 결과
+
+        Returns:
+            test_rag.json 형식의 딕셔너리
+        """
+        docs_dict = {}
+
+        # local_results 처리
+        for r in raw_results.get('local_results', []):
+            no = str(r.get('metadata', {}).get('source_doc_id', ''))
+            if not no:
+                continue
+
+            doc_type = r.get('doc_type', 'unknown')
+
+            if no not in docs_dict:
+                docs_dict[no] = {
+                    "no": no,
+                    "data_type": doc_type,
+                    "matches": []
+                }
+
+            match_info = {
+                "search_type": "local",
+                "similarity": r.get('similarity', 0),
+                "matched_entity": {
+                    "name": r.get('metadata', {}).get('name', ''),
+                    "entity_type": r.get('metadata', {}).get('entity_type', ''),
+                    "description": r.get('document', '')
+                },
+                "neighbors_1hop": [
+                    {
+                        "name": n.get('name', ''),
+                        "entity_type": n.get('entity_type', ''),
+                        "relation_keywords": n.get('relation_keywords', []),
+                        "relation_description": n.get('relation_description', '')
+                    }
+                    for n in r.get('neighbors', [])
+                ]
+            }
+            docs_dict[no]["matches"].append(match_info)
+
+        # global_results 처리
+        for r in raw_results.get('global_results', []):
+            no = str(r.get('metadata', {}).get('source_doc_id', ''))
+            if not no:
+                continue
+
+            doc_type = r.get('doc_type', 'unknown')
+
+            if no not in docs_dict:
+                docs_dict[no] = {
+                    "no": no,
+                    "data_type": doc_type,
+                    "matches": []
+                }
+
+            match_info = {
+                "search_type": "global",
+                "similarity": r.get('similarity', 0),
+                "matched_relation": {
+                    "source_entity": r.get('metadata', {}).get('source_entity', ''),
+                    "target_entity": r.get('metadata', {}).get('target_entity', ''),
+                    "keywords": r.get('metadata', {}).get('keywords', ''),
+                    "description": r.get('document', '')
+                },
+                "source_entity_info": r.get('source_entity_info'),
+                "target_entity_info": r.get('target_entity_info')
+            }
+            docs_dict[no]["matches"].append(match_info)
+
+        # matches 내부 similarity 기준 정렬
+        for doc in docs_dict.values():
+            doc['matches'] = sorted(
+                doc['matches'],
+                key=lambda m: m.get('similarity', 0),
+                reverse=True
+            )
+
+        # dict → list 변환 후 정렬
+        retrieved_docs = sorted(
+            docs_dict.values(),
+            key=lambda doc: max((m.get('similarity', 0) for m in doc['matches']), default=0),
+            reverse=True
+        )
+
+        return {
+            "query": raw_results.get('query', ''),
+            "keywords": {
+                "high_level": raw_results.get('high_level_keywords', []),
+                "low_level": raw_results.get('low_level_keywords', [])
+            },
+            "retrieved_docs": retrieved_docs
+        }
+
     def _prepare_input_json(
         self,
         ahp_results: Dict[str, Any],
