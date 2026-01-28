@@ -255,23 +255,29 @@ class ReportGenerator:
                     # 문서 번호로 RAG 결과에서 매칭 정보 찾기
                     doc_no = str(doc.get("no", ""))
                     if rag_results:
-                        for rag_doc in rag_results.get("retrieved_docs", []):
-                            if str(rag_doc.get("no", "")) == doc_no:
+                        retrieved_docs = rag_results.get("retrieved_docs", [])
+                        for rag_doc in retrieved_docs:
+                            # 문서 번호 비교 (문자열로 통일)
+                            rag_doc_no = str(rag_doc.get("no", ""))
+                            if rag_doc_no == doc_no:
                                 matches = rag_doc.get("matches", [])
                                 for match in matches:
+                                    # source_entity_info와 target_entity_info에서 엔티티 추출
                                     source_info = match.get("source_entity_info", {})
                                     target_info = match.get("target_entity_info", {})
                                     
-                                    if source_info.get("name"):
+                                    if source_info and source_info.get("name"):
                                         doc_entities.append(source_info["name"])
-                                    if target_info.get("name"):
+                                    if target_info and target_info.get("name"):
                                         doc_entities.append(target_info["name"])
                                     
+                                    # matched_relation에서 관계 추출
                                     relation = match.get("matched_relation", {})
                                     if relation:
-                                        doc_relations.append(
-                                            f"{relation.get('source_entity', '')} -> {relation.get('target_entity', '')}"
-                                        )
+                                        source_entity = relation.get("source_entity", "")
+                                        target_entity = relation.get("target_entity", "")
+                                        if source_entity and target_entity:
+                                            doc_relations.append(f"{source_entity} -> {target_entity}")
                                 break
                     
                     prof_docs.append({
@@ -341,31 +347,36 @@ class ReportGenerator:
 
 ## 1. 사용자 검색 정보
 
-**입력 질의:** [user_query]
+**입력 질의:** 입력 JSON의 "query" 필드 값을 그대로 사용하세요.
 
-**고수준 키워드:** [keywords.high_level] (쉼표로 구분하여 나열)
+**고수준 키워드:** 입력 JSON의 "keywords.high_level" 배열을 쉼표로 구분하여 나열하세요. 예: "딥러닝 의료영상 분석, 의료영상 처리 시스템 개발"
 
-**저수준 키워드:** [keywords.low_level] (쉼표로 구분하여 나열)
+**저수준 키워드:** 입력 JSON의 "keywords.low_level" 배열을 쉼표로 구분하여 나열하세요. 예: "딥러닝, 의료영상, 영상 분석, 시스템"
 
-**추출 관계:** [extracted_relationships] (관계를 "A -> B" 형식으로 나열, 없으면 생략)
+**추출 관계:** 입력 JSON의 "extracted_relationships" 배열에서 각 관계의 "source"와 "target"을 "A -> B" 형식으로 나열하세요. 
+- 예: "자연스러운 화질 복원 -> 베이어 디모자이크 방법, 베이어 디모자이크 방법 -> 베이어 CFA 패턴"
+- 배열이 비어있거나 없으면 "없음" 또는 생략하세요.
 
 ## 2. 교수별 관련 문서 목록
 
 (아래 형식을 교수 1명당 반복해서 작성하세요. 최대 3명까지만)
 
-### 교수명: [name]
-**소속:** [department]  
-**종합 점수:** [total_score] (AHP 종합 점수)  
-**타입별 점수:** 특허=[scores_by_type.patent], 논문=[scores_by_type.article], 연구과제=[scores_by_type.project]
+입력 JSON의 "professors" 배열에서 각 교수 정보를 사용하세요:
+
+### 교수명: [professors[].name]
+**소속:** [professors[].department]  
+**종합 점수:** [professors[].total_score] (AHP 종합 점수)  
+**타입별 점수:** 특허=[professors[].scores_by_type.patent], 논문=[professors[].scores_by_type.article], 연구과제=[professors[].scores_by_type.project]
 
 | 문서 유형 | 제목 | 연도 | 요약 | AHP점수 | 개체 | 관계 |
 |-----------|------|------|------|---------|------|------|
-| patent/article/project | [title] | [year] | [summary] | [score] | [entities] | [relationships] |
+| [documents[].type] | [documents[].title] | [documents[].year] | [documents[].summary] | [documents[].score] | [documents[].entities] | [documents[].relationships] |
 
 **주의사항:**
 - 각 교수마다 patent, article, project 각각 최대 3개씩만 표시하세요.
 - 문서는 AHP 점수가 높은 순서대로 이미 정렬되어 있습니다.
-- 개체와 관계는 해당 문서와 관련된 엔티티와 관계만 표시하세요 (없으면 빈 칸).
+- 개체(entities)는 해당 문서의 "entities" 배열을 쉼표로 구분하여 나열하세요. 비어있으면 빈 칸.
+- 관계(relationships)는 해당 문서의 "relationships" 배열을 쉼표로 구분하여 나열하세요. 비어있으면 빈 칸.
 
 ## 3. 보고서 설명
 
