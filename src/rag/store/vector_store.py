@@ -79,7 +79,9 @@ class ChromaVectorStore:
         ChromaVectorStore._initialized = True
 
     def _init_collections(self):
-        """6개 컬렉션 생성/로드"""
+        """9개 컬렉션 생성/로드"""
+        import time
+
         for collection_name in COLLECTIONS.values():
             self.collections[collection_name] = self.client.get_or_create_collection(
                 name=collection_name,
@@ -87,6 +89,9 @@ class ChromaVectorStore:
             )
             count = self.collections[collection_name].count()
             print(f"  - {collection_name}: {count} items")
+
+        # HNSW 인덱스 안정화를 위한 대기 (ChromaDB 1.4.x 타이밍 이슈 해결)
+        time.sleep(1)
 
     def _get_collection_name(self, doc_type: str, item_type: str) -> str:
         """
@@ -317,8 +322,30 @@ class ChromaVectorStore:
                         })
 
             except Exception as e:
-                print(f"Search error in {collection_name}: {e}")
-                continue
+                # HNSW 타이밍 이슈로 인한 재시도
+                import time
+                time.sleep(0.5)
+                try:
+                    results = collection.query(
+                        query_embeddings=[query_embedding],
+                        n_results=top_k,
+                        include=["documents", "metadatas", "distances"]
+                    )
+                    if results and results["ids"][0]:
+                        for i, id in enumerate(results["ids"][0]):
+                            distance = results["distances"][0][i] if results["distances"] else 0
+                            similarity = 1 - distance
+                            all_results.append({
+                                "id": id,
+                                "document": results["documents"][0][i] if results["documents"] else "",
+                                "metadata": results["metadatas"][0][i] if results["metadatas"] else {},
+                                "similarity": similarity,
+                                "doc_type": doc_type,
+                                "item_type": "chunk"
+                            })
+                except Exception as e2:
+                    print(f"Search error in {collection_name}: {e2}")
+                    continue
 
         all_results.sort(key=lambda x: x["similarity"], reverse=True)
         return all_results[:top_k]
@@ -384,8 +411,30 @@ class ChromaVectorStore:
                         })
 
             except Exception as e:
-                print(f"Search error in {collection_name}: {e}")
-                continue
+                # HNSW 타이밍 이슈로 인한 재시도
+                import time
+                time.sleep(0.5)
+                try:
+                    results = collection.query(
+                        query_embeddings=[query_embedding],
+                        n_results=top_k,
+                        include=["documents", "metadatas", "distances"]
+                    )
+                    if results and results["ids"][0]:
+                        for i, id in enumerate(results["ids"][0]):
+                            distance = results["distances"][0][i] if results["distances"] else 0
+                            similarity = 1 - distance
+                            all_results.append({
+                                "id": id,
+                                "document": results["documents"][0][i] if results["documents"] else "",
+                                "metadata": results["metadatas"][0][i] if results["metadatas"] else {},
+                                "similarity": similarity,
+                                "doc_type": doc_type,
+                                "item_type": "entity"
+                            })
+                except Exception as e2:
+                    print(f"Search error in {collection_name}: {e2}")
+                    continue
 
         # 유사도 기준 정렬 후 상위 k개 반환
         all_results.sort(key=lambda x: x["similarity"], reverse=True)
@@ -450,8 +499,30 @@ class ChromaVectorStore:
                         })
 
             except Exception as e:
-                print(f"Search error in {collection_name}: {e}")
-                continue
+                # HNSW 타이밍 이슈로 인한 재시도
+                import time
+                time.sleep(0.5)
+                try:
+                    results = collection.query(
+                        query_embeddings=[query_embedding],
+                        n_results=top_k,
+                        include=["documents", "metadatas", "distances"]
+                    )
+                    if results and results["ids"][0]:
+                        for i, id in enumerate(results["ids"][0]):
+                            distance = results["distances"][0][i] if results["distances"] else 0
+                            similarity = 1 - distance
+                            all_results.append({
+                                "id": id,
+                                "document": results["documents"][0][i] if results["documents"] else "",
+                                "metadata": results["metadatas"][0][i] if results["metadatas"] else {},
+                                "similarity": similarity,
+                                "doc_type": doc_type,
+                                "item_type": "relation"
+                            })
+                except Exception as e2:
+                    print(f"Search error in {collection_name}: {e2}")
+                    continue
 
         all_results.sort(key=lambda x: x["similarity"], reverse=True)
         return all_results[:top_k]
