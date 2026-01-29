@@ -52,11 +52,14 @@ class TextProcessor:
         for patent in patent_data:
             self.stats["total"] += 1
 
-            # 필수 필드 확인
+            # 필수 필드 확인 (title, text 필드 사용)
             doc_id = str(patent.get("no", ""))
             doc_type = patent.get("data_type", "patent")
-            title = patent.get("kipris_application_name", "").strip()
-            abstract = patent.get("kipris_abstract", "").strip()
+            title = patent.get("title", "").strip()
+            abstract = patent.get("text", "").strip()
+
+            # metadata에서 추가 정보 추출
+            patent_metadata = patent.get("metadata", {})
 
             if not abstract:
                 self.stats["skipped_short"] += 1
@@ -82,8 +85,8 @@ class TextProcessor:
 
             # 메타데이터 구성
             metadata = {
-                "register_status": patent.get("kipris_register_status", ""),
-                "application_date": patent.get("kipris_application_date", ""),
+                "register_status": patent_metadata.get("kipris_register_status", ""),
+                "application_date": patent_metadata.get("kipris_application_date", ""),
                 "title": title
             }
 
@@ -148,11 +151,11 @@ class TextProcessor:
         for article in article_data:
             self.stats["total"] += 1
 
-            # 필수 필드 추출
+            # 필수 필드 추출 (title, text 필드 사용)
             doc_id = str(article.get("no", ""))
             doc_type = article.get("data_type", "article")
-            title = article.get("THSS_NM", "").strip()
-            abstract = article.get("abstract", "").strip()
+            title = article.get("title", "").strip()
+            abstract = article.get("text", "").strip()
 
             if not abstract:
                 self.stats["skipped_empty"] += 1
@@ -188,7 +191,7 @@ class TextProcessor:
         연구과제 데이터 전처리
 
         처리 로직:
-        - [과제명] + [연구목표] + [연구내용] + [기대효과] 결합
+        - [과제명] + [내용] 결합 (text 필드에 이미 전체 내용 포함)
         - 100자 이하면 제외
 
         Args:
@@ -203,31 +206,19 @@ class TextProcessor:
         for project in project_data:
             self.stats["total"] += 1
 
-            # 필수 필드 추출
+            # 필수 필드 추출 (title, text 필드 사용)
             doc_id = str(project.get("no", ""))
             doc_type = project.get("data_type", "project")
-            title = project.get("excel_project_name_kr", "").strip()
+            title = project.get("title", "").strip()
+            content = project.get("text", "").strip()
 
-            # 연구 내용 필드들
-            objective = project.get("excel_research_objective_summary", "").strip()
-            content = project.get("excel_research_content_summary", "").strip()
-            effect = project.get("excel_expected_effect_summary", "").strip()
-
-            # 내용이 모두 비어있으면 스킵
-            if not objective and not content and not effect:
+            # 내용이 비어있으면 스킵
+            if not content:
                 self.stats["skipped_empty"] += 1
                 continue
 
-            # 텍스트 구성
-            text_parts = [f"[과제명] {title}"]
-            if objective:
-                text_parts.append(f"[연구목표] {objective}")
-            if content:
-                text_parts.append(f"[연구내용] {content}")
-            if effect:
-                text_parts.append(f"[기대효과] {effect}")
-
-            text = "\n".join(text_parts)
+            # 텍스트 구성: [과제명] + [내용]
+            text = f"[과제명] {title}\n[내용] {content}"
             text = self._clean_text(text)
 
             # 100자 이하면 제외

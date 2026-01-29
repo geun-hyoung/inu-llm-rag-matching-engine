@@ -68,11 +68,11 @@ def evaluate_context_relevance(
         ... )
         >>> print(f"Context Relevance: {score:.3f}")
     """
+    if not contexts:
+        return None  # 검색된 문서가 없으면 None 반환 (평균 계산에서 제외)
+
     if not RAGAS_AVAILABLE:
         return _fallback_context_relevance(query, contexts)
-
-    if not contexts:
-        return 0.0
 
     try:
         return asyncio.run(_evaluate_context_relevance_async(query, contexts))

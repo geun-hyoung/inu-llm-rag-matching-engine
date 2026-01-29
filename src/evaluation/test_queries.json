@@ -11,8 +11,8 @@
       "query": "투자자가 어떻게 행동하는지 분석하는 기술 개발 연구를 찾고 있어요.",
       "abstraction_level": "medium",
       "source_doc_ids": [
-        1779,
-        1422
+        1694,
+        1367
       ],
       "data_type": "article",
       "references": [
@@ -281,8 +281,8 @@
       "query": "항생제 내성균 검출을 위한 스마트 마이크로캡슐 기술 개발 관련 연구를 찾고 있어요.",
       "abstraction_level": "concrete",
       "source_doc_ids": [
-        1288,
-        1471
+        1093,
+        1221
       ],
       "data_type": "project",
       "references": [
@@ -294,8 +294,8 @@
       "query": "건물 진동 흡수 장치 기술 개발 관련 연구를 찾고 있어요, 혹시 도움 주실 수 있나요?",
       "abstraction_level": "abstract",
       "source_doc_ids": [
-        484,
-        579
+        478,
+        559
       ],
       "data_type": "project",
       "references": [
@@ -307,8 +307,8 @@
       "query": "가스를 감지하는 센서 소재 기술 연구를 찾고 있어요.",
       "abstraction_level": "medium",
       "source_doc_ids": [
-        888,
-        1073
+        691,
+        1022
       ],
       "data_type": "project",
       "references": [
@@ -320,8 +320,8 @@
       "query": "칼코지나이드 태양전지의 defect control 기술 개발 관련 연구를 찾고 있어요.",
       "abstraction_level": "concrete",
       "source_doc_ids": [
-        717,
-        1422
+        485,
+        1114
       ],
       "data_type": "project",
       "references": [
@@ -334,7 +334,7 @@
       "abstraction_level": "medium",
       "source_doc_ids": [
         17,
-        959
+        923
       ],
       "data_type": "project",
       "references": [
@@ -346,8 +346,8 @@
       "query": "나노입자로 질병 진단하고 치료하는 기술 개발 관련 연구를 찾고 있어요.",
       "abstraction_level": "abstract",
       "source_doc_ids": [
-        1494,
-        1166
+        1105,
+        1251
       ],
       "data_type": "project",
       "references": [
@@ -359,8 +359,8 @@
       "query": "수생생물 건강성 평가를 위한 다차원 오믹스 기술 개발 관련 연구를 찾고 있어요.",
       "abstraction_level": "concrete",
       "source_doc_ids": [
-        184,
-        10
+        10,
+        75
       ],
       "data_type": "project",
       "references": [
@@ -372,9 +372,9 @@
       "query": "사용자에 맞춰 자동 조절되는 건물 기술 개발 연구를 찾고 있어요.",
       "abstraction_level": "abstract",
       "source_doc_ids": [
-        1023,
-        563,
-        857
+        481,
+        543,
+        718
       ],
       "data_type": "project",
       "references": [
@@ -387,8 +387,8 @@
       "query": "인간 활동이 바다 환경에 미치는 영향 연구를 찾고 있어요.",
       "abstraction_level": "medium",
       "source_doc_ids": [
-        1569,
-        1428
+        1345,
+        1426
       ],
       "data_type": "project",
       "references": [
@@ -400,8 +400,8 @@
       "query": "혈관 질환 원인 규명 기술 개발 연구를 찾고 있어요.",
       "abstraction_level": "abstract",
       "source_doc_ids": [
-        1646,
-        1597
+        1528,
+        1365
       ],
       "data_type": "project",
       "references": [
@@ -413,8 +413,8 @@
       "query": "자외선에 손상된 피부를 한방으로 치료하는 기술 개발 연구를 찾고 있어요.",
       "abstraction_level": "medium",
       "source_doc_ids": [
-        826,
-        976
+        634,
+        791
       ],
       "data_type": "project",
       "references": [
@@ -426,8 +426,8 @@
       "query": "환경 친화적 유산소 산화반응 기술 개발 관련 연구를 찾고 있어요.",
       "abstraction_level": "concrete",
       "source_doc_ids": [
-        1562,
-        270
+        1343,
+        216
       ],
       "data_type": "project",
       "references": [
@@ -439,8 +439,8 @@
       "query": "빛이 통과하는 태양전지 기술 개발 연구를 찾고 있어요.",
       "abstraction_level": "medium",
       "source_doc_ids": [
-        1164,
-        1480
+        1103,
+        1311
       ],
       "data_type": "project",
       "references": [
@@ -452,8 +452,8 @@
       "query": "결로 발생 전 미리 감지하는 기술 개발 관련 연구를 찾고 있어요.",
       "abstraction_level": "abstract",
       "source_doc_ids": [
-        1385,
-        1483
+        1306,
+        1400
       ],
       "data_type": "project",
       "references": [
@@ -465,8 +465,8 @@
       "query": "건설현장 장비와 자재를 자동으로 배치하는 기술 개발 연구를 찾고 있어요.",
       "abstraction_level": "medium",
       "source_doc_ids": [
-        403,
-        867
+        397,
+        464
       ],
       "data_type": "project",
       "references": [
