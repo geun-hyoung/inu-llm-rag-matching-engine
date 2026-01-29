@@ -13,6 +13,7 @@ from openai import OpenAI
 
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 from config.settings import OPENAI_API_KEY, LLM_MODEL, RETRIEVAL_TOP_K, SIMILARITY_THRESHOLD
+from src.utils.cost_tracker import log_chat_usage
 from src.rag.prompts import format_keyword_extraction_prompt, RAG_RESPONSE_PROMPT
 from src.rag.embedding.embedder import Embedder
 from src.rag.store.vector_store import ChromaVectorStore
@@ -82,6 +83,14 @@ class HybridRetriever:
                 temperature=0.0,
                 max_tokens=500
             )
+
+            # 비용 추적
+            log_chat_usage(
+                component="keyword_extraction",
+                model=self.llm_model,
+                response=response
+            )
+
             content = response.choices[0].message.content.strip()
 
             # JSON 파싱
@@ -463,6 +472,14 @@ class HybridRetriever:
                 temperature=0.3,
                 max_tokens=1000
             )
+
+            # 비용 추적
+            log_chat_usage(
+                component="rag_response",
+                model=self.llm_model,
+                response=response
+            )
+
             return response.choices[0].message.content.strip()
 
         except Exception as e:

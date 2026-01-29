@@ -14,6 +14,7 @@ from config.settings import (
     OPENAI_EMBEDDING_MODEL, OPENAI_EMBEDDING_DIM,
     OPENAI_API_KEY
 )
+from src.utils.cost_tracker import log_embedding_usage
 
 
 class Embedder:
@@ -154,6 +155,13 @@ class Embedder:
         response = self.client.embeddings.create(
             model=OPENAI_EMBEDDING_MODEL,
             input=texts
+        )
+
+        # 비용 추적
+        log_embedding_usage(
+            component="embedding",
+            model=OPENAI_EMBEDDING_MODEL,
+            response=response
         )
 
         embeddings = [item.embedding for item in response.data]

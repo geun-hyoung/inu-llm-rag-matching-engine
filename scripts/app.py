@@ -14,6 +14,7 @@ import pandas as pd
 sys.path.append(str(Path(__file__).parent.parent))
 from src.reporting.report_generator import ReportGenerator
 from config.settings import OPENAI_API_KEY
+from src.utils.cost_tracker import get_cost_tracker
 
 
 # 페이지 설정
@@ -124,7 +125,7 @@ with tab1:
                 status_text.text("RAG 검색 수행 중...")
                 progress_bar.progress(30)
 
-                # 전체 파이프라인 실행
+                # 전체 파이프라인 실행 (내부에서 비용 추적)
                 report_data = generator.generate_report_from_query(
                     query=query,
                     doc_types=doc_types,
@@ -141,8 +142,14 @@ with tab1:
                 progress_bar.progress(100)
                 status_text.text("완료!")
 
+                # 비용 정보 가져오기
+                cost_result = report_data.get("api_cost")
+
                 st.success(f"✅ 리포트 생성 완료!")
-                st.info(f"저장 위치: {json_path.parent}")
+                if cost_result and cost_result.get('total_cost_usd', 0) > 0:
+                    st.info(f"저장 위치: {json_path.parent} | API 비용: ${cost_result['total_cost_usd']:.6f}")
+                else:
+                    st.info(f"저장 위치: {json_path.parent}")
 
                 # 생성된 리포트 표시
                 st.markdown("---")
@@ -291,6 +298,10 @@ with tab2:
                 status_text = st.empty()
 
                 try:
+                    # 비용 추적 시작
+                    tracker = get_cost_tracker()
+                    tracker.start_task("streamlit_report", description=f"Streamlit 리포트: {selected_ahp_file}")
+
                     generator = ReportGenerator(api_key=api_key)
 
                     status_text.text("GPT-4o-mini를 사용하여 리포트 생성 중...")
@@ -308,8 +319,14 @@ with tab2:
                     json_path = generator.save_json(report_data)
                     text_path = generator.save_text(report_data)
 
+                    # 비용 추적 종료
+                    cost_result = tracker.end_task()
+
                     st.success(f"✅ 리포트 생성 완료!")
-                    st.info(f"저장 위치: {json_path.parent}")
+                    if cost_result and cost_result.get('total_cost_usd', 0) > 0:
+                        st.info(f"저장 위치: {json_path.parent} | API 비용: ${cost_result['total_cost_usd']:.6f}")
+                    else:
+                        st.info(f"저장 위치: {json_path.parent}")
 
                     # 생성된 리포트 표시
                     st.markdown("---")

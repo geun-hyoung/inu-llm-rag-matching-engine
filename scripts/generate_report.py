@@ -13,10 +13,15 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from src.reporting.report_generator import ReportGenerator
 from config.settings import OPENAI_API_KEY
+from src.utils.cost_tracker import get_cost_tracker
 
 
 def main():
     """리포트 생성 실행"""
+    # 비용 추적 시작
+    tracker = get_cost_tracker()
+    tracker.start_task("report", description="리포트 생성")
+
     parser = argparse.ArgumentParser(description="AHP 결과 기반 리포트 생성")
     parser.add_argument(
         "--ahp-file",
@@ -155,6 +160,11 @@ def main():
     print(f"저장 위치: {json_path.parent}")
     print(f"JSON 파일: {json_path.name}")
     print(f"TXT 파일: {text_path.name}")
+
+    # 비용 추적 종료
+    cost_result = tracker.end_task()
+    if cost_result and cost_result.get('total_cost_usd', 0) > 0:
+        print(f"\nAPI Cost: ${cost_result['total_cost_usd']:.6f}")
 
 
 if __name__ == "__main__":

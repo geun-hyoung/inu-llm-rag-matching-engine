@@ -12,6 +12,7 @@ from openai import OpenAI
 
 sys.path.append(str(Path(__file__).parent.parent.parent))
 from config.settings import OPENAI_API_KEY, LLM_MODEL
+from src.utils.cost_tracker import log_chat_usage, get_cost_tracker
 
 
 class ReportGenerator:
@@ -61,7 +62,11 @@ class ReportGenerator:
         """
         if doc_types is None:
             doc_types = ["patent", "article", "project"]
-        
+
+        # 비용 추적 시작
+        tracker = get_cost_tracker()
+        tracker.start_task("full_pipeline", description=f"전체 파이프라인: {query[:30]}...")
+
         # RAG 검색 → 교수 집계 → AHP 랭킹 → 리포트 생성
         from src.rag.query.retriever import HybridRetriever
         from src.ranking.professor_aggregator import ProfessorAggregator
@@ -106,11 +111,18 @@ class ReportGenerator:
         }
         
         # 5. 리포트 생성
-        return self.generate_report(
+        result = self.generate_report(
             ahp_results=ahp_results,
             rag_results=rag_results,
             few_shot_examples=few_shot_examples
         )
+
+        # 비용 추적 종료
+        cost_result = tracker.end_task()
+        if cost_result:
+            result["api_cost"] = cost_result
+
+        return result
     
     def generate_report(
         self,
@@ -149,7 +161,14 @@ class ReportGenerator:
             ],
             temperature=0.3
         )
-        
+
+        # 비용 추적
+        log_chat_usage(
+            component="report_generation",
+            model=self.model,
+            response=response
+        )
+
         report_text = response.choices[0].message.content
         
         # 결과 구조화

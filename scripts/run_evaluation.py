@@ -31,6 +31,7 @@ from src.rag.query.retriever import HybridRetriever
 from src.rag.query.naive_retriever import NaiveRetriever
 from src.evaluation import evaluate_context_relevance, evaluate_noise_rate
 from config.settings import RESULTS_DIR, FINAL_TOP_K
+from src.utils.cost_tracker import get_cost_tracker
 
 
 def load_test_queries(query_file: str = None) -> list:
@@ -614,6 +615,10 @@ def run_comparison_evaluation(
 
 
 def main():
+    # 비용 추적 시작
+    tracker = get_cost_tracker()
+    tracker.start_task("evaluation", description="Retrieval 평가")
+
     parser = argparse.ArgumentParser(
         description="Retrieval 평가 - Context Relevance + Noise Rate@K (Naive vs Hybrid 비교 지원)"
     )
@@ -739,6 +744,11 @@ def main():
             retriever_type=args.retriever,
             compare=args.compare
         )
+
+    # 비용 추적 종료
+    cost_result = tracker.end_task()
+    if cost_result and cost_result.get('total_cost_usd', 0) > 0:
+        print(f"\nAPI Cost: ${cost_result['total_cost_usd']:.6f}")
 
 
 if __name__ == "__main__":

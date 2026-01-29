@@ -11,7 +11,8 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
 from src.rag.query.retriever import HybridRetriever
-from config.settings import RESULTS_DIR
+from config.settings import RESULTS_DIR, SIMILARITY_THRESHOLD
+from src.utils.cost_tracker import get_cost_tracker
 
 
 def save_query_result(result: dict):
@@ -178,6 +179,10 @@ def format_result(result: dict, verbose: bool = False) -> str:
 
 
 def main():
+    # 비용 추적 시작
+    tracker = get_cost_tracker()
+    tracker.start_task("query", description="Query Time 검색")
+
     parser = argparse.ArgumentParser(
         description="Query Time - HybridRetriever 검색 실행"
     )
@@ -235,6 +240,7 @@ def main():
     results = retriever.retrieve(
         query=args.query,
         retrieval_top_k=args.retrieval_top_k,
+        similarity_threshold=SIMILARITY_THRESHOLD,
         mode=args.mode
     )
 
@@ -266,6 +272,11 @@ def main():
         print(json.dumps(output, ensure_ascii=False, indent=2))
     else:
         print(format_result(results, verbose=args.verbose))
+
+    # 비용 추적 종료
+    cost_result = tracker.end_task()
+    if cost_result and cost_result.get('total_cost_usd', 0) > 0:
+        print(f"\nAPI Cost: ${cost_result['total_cost_usd']:.6f}")
 
 
 if __name__ == "__main__":

@@ -16,6 +16,7 @@ from typing import List, Dict, Optional
 
 sys.path.append(str(Path(__file__).parent.parent.parent))
 from config.settings import OPENAI_API_KEY, LLM_MODEL
+from src.utils.cost_tracker import log_chat_usage
 
 try:
     from openai import AsyncOpenAI
@@ -167,6 +168,13 @@ class NoiseRateEvaluator:
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 temperature=0  # 일관된 판정
+            )
+
+            # 비용 추적
+            log_chat_usage(
+                component="noise_rate_eval",
+                model=self.model,
+                response=response
             )
 
             result = json.loads(response.choices[0].message.content)

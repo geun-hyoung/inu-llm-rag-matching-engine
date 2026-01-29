@@ -32,6 +32,7 @@ from src.rag.index.entity_extractor import EntityRelationExtractor
 from src.rag.store.vector_store import ChromaVectorStore
 from src.rag.store.graph_store import GraphStore
 from src.rag.embedding.embedder import Embedder
+from src.utils.cost_tracker import get_cost_tracker
 
 
 # 로깅 설정
@@ -276,6 +277,10 @@ class IndexBuilder:
         logger.info(f"Starting Index Build for {self.doc_type}")
         logger.info("=" * 50)
 
+        # 비용 추적 시작
+        tracker = get_cost_tracker()
+        tracker.start_task("indexing", description=f"{self.doc_type} 문서 인덱싱")
+
         checkpoint_file = Path(f"data/checkpoint_{self.doc_type}.pkl")
 
         # 체크포인트에서 복원
@@ -326,6 +331,12 @@ class IndexBuilder:
 
         # 6. GraphStore 저장
         self.store_to_graph_db(entities, relations)
+
+        # 비용 추적 종료 (문서 처리 통계 포함)
+        cost_result = tracker.end_task(**self.stats)
+        if cost_result:
+            logger.info(f"API Cost: ${cost_result.get('total_cost_usd', 0):.6f}")
+            logger.info(f"Documents: {cost_result.get('metadata', {}).get('docs_processed', 0)}")
 
         # 결과 출력
         logger.info("=" * 50)

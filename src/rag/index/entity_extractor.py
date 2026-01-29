@@ -13,6 +13,7 @@ from openai import OpenAI
 
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 from config.settings import OPENAI_API_KEY, LLM_MODEL
+from src.utils.cost_tracker import get_cost_tracker, log_chat_usage
 from src.rag.prompts import (
     TUPLE_DELIMITER,
     RECORD_DELIMITER,
@@ -65,6 +66,14 @@ class EntityRelationExtractor:
                 temperature=0.0,
                 max_tokens=4096
             )
+
+            # 비용 추적
+            log_chat_usage(
+                component="entity_extraction",
+                model=self.model,
+                response=response
+            )
+
             return response.choices[0].message.content
         except Exception as e:
             print(f"LLM call error: {e}")
