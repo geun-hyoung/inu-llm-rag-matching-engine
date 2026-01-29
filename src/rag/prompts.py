@@ -5,7 +5,7 @@ LightRAG 프롬프트 통합 관리 모듈
 
 산학협력 매칭 시스템용 커스텀 프롬프트
 - 논문, 특허, R&D 과제에서 일관된 Entity 추출
-- Entity Types: ResearchObject, Problem, Method, Objective
+- Entity Types: Target, Problem, Solution, Achievement
 """
 
 # ============================================================
@@ -21,10 +21,10 @@ COMPLETION_DELIMITER = "<|COMPLETE|>"
 # ============================================================
 # 산학협력 매칭에 최적화된 Entity 타입
 DEFAULT_ENTITY_TYPES = [
-    "research_object",  # 연구/발명의 핵심 대상
-    "problem",          # 해결하고자 하는 구체적 문제
-    "method",           # 문제 해결을 위한 기술/기법
-    "objective",        # 달성하고자 하는 효과/성과
+    "target",       # 해결하고자 하는 대상 또는 주체
+    "problem",      # 연구대상(Target)의 기존 한계나 부정적 현상
+    "solution",     # 문제(Problem) 해결을 위한 구체적 방법/기술/알고리즘
+    "achievement",  # 제안된 방법으로 달성한 결과/성과
 ]
 
 
@@ -39,21 +39,44 @@ ENTITY_EXTRACTION_PROMPT = """
 - 핵심: 검색 가능한 구체적 기술 용어 추출 (일반적 용어 ✗)
 
 -Entity Types-
-| 타입 | 정의 | 핵심 질문 | 포함 예시 | 제외 |
+| 타입 | 정의 | 핵심 질문 | 타입 판별 힌트 | 제외 |
 |------|------|----------|----------|------|
-| target (연구 대상) | 연구가 다루는 핵심 물체, 시스템, 현상 | 무엇을 연구하는가? | 센서, 배터리, 시스템, 모델, 데이터 | 행위(→method), 효과(→objective) |
-| problem (문제) | 연구 대상의 기존 한계나 부정적 현상 | 어떤 문제를 해결하려는가? | "~한계", "~어렵다", "~부족하다" | 배경설명, 일반론 |
-| method (방법) | 문제 해결을 위한 구체적 기술, 알고리즘, 절차 | 어떻게 해결하는가? | PointNet++, KoBERT, 표면 코팅, 셀 밸런싱 | 단독 행위(분석, 처리), 상위개념(CNN있으면→딥러닝 제외) |
-| objective (목표/효과) | 제안된 방법으로 달성한 정량적/정성적 성과 | 무엇을 달성했는가? | "수명 200% 향상", "오차 0.11% 달성" | 맥락 없는 수치("20%"), 일반론("성능 향상") |
+| target (연구 대상) | 문제 해결 및 연구 성과에서 해결하고자 하는 대상 또는 주체 | 무엇을 연구하는가? | 센서, 배터리| 행위(→solution), 효과(→achievement) |
+| problem (문제) | 연구대상(Target)의 기존 한계나 부정적인 현상 | 어떤 문제를 해결하려는가? | "~한계", "~어렵다", "~부족하다" | 배경설명, 일반론 |
+| solution (해결책) | 발생한 문제(Problem) 해결을 위한 구체적인 방법, 기술, 알고리즘, 절차 | 어떻게 해결하는가? | 파인튜닝, 표면코팅, Few-shot Learning | 단독 행위(분석, 처리), 상위개념 |
+| achievement (성과) | 제안된 방법으로 달성한 결과, 성과 (정량적/정성적) | 무엇을 달성했는가? | "수명 200% 향상", "오차 0.11% 달성" | 맥락 없는 수치, 일반론 |
 
 -Rules-
 1. 명시적 추출만: 텍스트에 직접 언급된 내용만, 한국어, 명사/명사구 형태
 2. 열거형 분리: 쉼표(,)로 나열된 독립적 항목 → 개별 엔티티로 분리 (단, 하나의 개념: "수도 및 하수도", "연구 및 개발"은 유지)
 3. 구체적 표현 우선: 더 구체적인 표현이 있으면 상위 개념 제외
-4. 일반 용어 금지:
-   - 엔티티: "데이터 분석", "성능 향상", "최적화", "효율 개선"
-   - 관계 키워드: "기술 적용", "시스템 개선" → 도메인 특화 용어로 작성
-5. 맥락 없는 수치 금지: ✗ "20%", "0.11%" → ✓ "수명 200% 향상"
+4. 맥락 없는 수치 금지: ✗ "20%", "0.11%" → ✓ "수명 200% 향상"
+
+-BLACKLIST (엔티티 이름에 단독 사용 금지)-
+아래 단어는 검색 변별력이 없으므로 엔티티 이름에 **단독으로 사용 금지**:
+
+| 적용 타입 | 금지 단어 |
+|----------|----------|
+| 공통 (모든 타입) | "기술", "개발", "연구", "분석", "처리", "시스템", "방법" |
+| target | "장치", "데이터" |
+| problem | "문제", "한계", "부족", "어려움", "이슈" |
+| solution | "적용" |
+| achievement | "향상", "개선", "최적화", "성능", "효율" |
+
+금지 예시:
+- ✗ "기술 개발" → 무엇의 기술인지 불명확
+- ✗ "시스템 구축" → 무슨 시스템인지 불명확
+- ✗ "성능 향상" → 무엇의 성능인지 불명확
+
+-Guidelines (좋은 엔티티의 특징, 권장사항)-
+아래 특성을 가진 엔티티가 검색에 효과적입니다 (강제 아님, 권장):
+
+| 타입 | 좋은 엔티티의 특징 | 좋은 예 (✓) |
+|------|-------------------|-------------|
+| target | ① 고유명사 포함 (PointNet++, BERT)<br>② 도메인 특화 물질/장치명 (양극재, LiDAR)<br>③ 구체적 수식어 포함 | "리튬이온 배터리 양극재", "LiDAR 포인트 클라우드" |
+| problem | ① [구체적 맥락] + [문제 표현] 형태<br>② 원인이 명시된 한계 | "고온 구조적 불안정성", "한국어 특성 반영 부족" |
+| solution | ① 알고리즘 고유명사 (Transformer, CNN)<br>② 구체적 기법명 (Few-shot Learning) | "KoBERT 파인튜닝", "표면 코팅 기술" |
+| achievement | ① 정량적 수치 포함 ("95% 정확도")<br>② 구체적 지표명 + 방향 | "사이클 수명 200% 향상", "처리 속도 10배 향상" |
 
 -Steps-
 1. 엔티티 추출
@@ -61,7 +84,9 @@ ENTITY_EXTRACTION_PROMPT = """
 
 2. 관계 추출
    - relationship_description: 두 엔티티가 관련된 이유
-   - relationship_keywords: 도메인 특화 키워드 2-3개 (예: ✗ "기술 적용" → ✓ "SOC 알고리즘 기반 충전 상태 추정")
+   - relationship_keywords: 관계의 핵심 개념/주제를 요약하는 키워드 2-3개
+     * 도메인 맥락이 있으면 반드시 포함 (예: "배터리 수명 연장", "LiDAR 실시간 처리")
+     * 범용어 단독 사용 금지 (예: ✗ "성능 향상", "효율 개선" → ✓ "자율주행 메모리 최적화")
    Format: ("relationship"{tuple_delimiter}<source_entity>{tuple_delimiter}<target_entity>{tuple_delimiter}<relationship_description>{tuple_delimiter}<relationship_keywords>)
 
 3. 완료 시 {completion_delimiter} 출력
@@ -75,12 +100,12 @@ Text:
 본 연구에서는 리튬이온 배터리의 양극재 열화 현상을 분석하였다. 기존 양극재는 고온에서 구조적 불안정성 문제가 있었다. 이를 해결하기 위해 표면 코팅 기술과 도핑 기법을 적용하였으며, 이를 통해 사이클 수명이 200% 향상되었다.
 ################
 Output:
-("entity"{tuple_delimiter}"리튬이온 배터리 양극재"{tuple_delimiter}"research_object"{tuple_delimiter}"본 연구에서 핵심적으로 다루는 배터리 소재"){record_delimiter}
-("entity"{tuple_delimiter}"고온 구조적 불안정성"{tuple_delimiter}"problem"{tuple_delimiter}"기존 양극재가 고온에서 겪는 구조적 문제"){record_delimiter}
-("entity"{tuple_delimiter}"표면 코팅 기술"{tuple_delimiter}"method"{tuple_delimiter}"양극재 안정성 향상을 위한 표면 처리 기법"){record_delimiter}
-("entity"{tuple_delimiter}"도핑 기법"{tuple_delimiter}"method"{tuple_delimiter}"양극재 특성 개선을 위한 원소 첨가 방법"){record_delimiter}
-("entity"{tuple_delimiter}"사이클 수명 200% 향상"{tuple_delimiter}"objective"{tuple_delimiter}"연구를 통해 달성한 배터리 수명 개선 효과"){record_delimiter}
-("relationship"{tuple_delimiter}"리튬이온 배터리 양극재"{tuple_delimiter}"고온 구조적 불안정성"{tuple_delimiter}"양극재가 고온에서 구조적 불안정성 문제를 가짐"{tuple_delimiter}"소재 한계, 열화"){record_delimiter}
+("entity"{tuple_delimiter}"리튬이온 배터리 양극재"{tuple_delimiter}"target"{tuple_delimiter}"배터리의 핵심 소재로, 연구가 해결하고자 하는 대상이므로 target"){record_delimiter}
+("entity"{tuple_delimiter}"고온 구조적 불안정성"{tuple_delimiter}"problem"{tuple_delimiter}"양극재의 기존 한계를 나타내는 부정적 현상이므로 problem"){record_delimiter}
+("entity"{tuple_delimiter}"표면 코팅 기술"{tuple_delimiter}"solution"{tuple_delimiter}"구조적 불안정성 문제를 해결하기 위한 구체적 기법이므로 solution"){record_delimiter}
+("entity"{tuple_delimiter}"도핑 기법"{tuple_delimiter}"solution"{tuple_delimiter}"양극재 특성 개선을 위한 구체적 방법이므로 solution"){record_delimiter}
+("entity"{tuple_delimiter}"사이클 수명 200% 향상"{tuple_delimiter}"achievement"{tuple_delimiter}"제안된 방법으로 달성한 정량적 성과이므로 achievement"){record_delimiter}
+("relationship"{tuple_delimiter}"리튬이온 배터리 양극재"{tuple_delimiter}"고온 구조적 불안정성"{tuple_delimiter}"양극재가 고온에서 구조적 불안정성 문제를 가짐"{tuple_delimiter}"양극재 소재 한계, 고온 열화 현상"){record_delimiter}
 ("relationship"{tuple_delimiter}"표면 코팅 기술"{tuple_delimiter}"고온 구조적 불안정성"{tuple_delimiter}"표면 코팅으로 구조적 불안정성 문제를 해결함"{tuple_delimiter}"표면 코팅 기반 안정화, 양극재 열화 방지"){record_delimiter}
 ("relationship"{tuple_delimiter}"도핑 기법"{tuple_delimiter}"사이클 수명 200% 향상"{tuple_delimiter}"도핑 기법 적용으로 수명이 향상됨"{tuple_delimiter}"도핑 기반 특성 개선, 사이클 수명 연장"){record_delimiter}
 {completion_delimiter}
@@ -92,42 +117,42 @@ Text:
 본 발명은 전기자동차용 배터리 관리 시스템에 관한 것이다. SOC 추정 알고리즘과 셀 밸런싱 기법을 적용하여 배터리 효율을 최적화한다.
 ################
 Output:
-("entity"{tuple_delimiter}"전기자동차용 배터리 관리 시스템"{tuple_delimiter}"research_object"{tuple_delimiter}"본 발명에서 다루는 배터리 관리 장치"){record_delimiter}
-("entity"{tuple_delimiter}"SOC 추정 알고리즘"{tuple_delimiter}"method"{tuple_delimiter}"배터리 충전 상태를 추정하는 알고리즘"){record_delimiter}
-("entity"{tuple_delimiter}"셀 밸런싱 기법"{tuple_delimiter}"method"{tuple_delimiter}"배터리 셀 간 균형을 맞추는 기법"){record_delimiter}
-("entity"{tuple_delimiter}"배터리 효율 최적화"{tuple_delimiter}"objective"{tuple_delimiter}"시스템을 통해 달성하고자 하는 효율 개선"){record_delimiter}
+("entity"{tuple_delimiter}"전기자동차용 배터리 관리 시스템"{tuple_delimiter}"target"{tuple_delimiter}"발명이 해결하고자 하는 핵심 대상 시스템이므로 target"){record_delimiter}
+("entity"{tuple_delimiter}"SOC 추정 알고리즘"{tuple_delimiter}"solution"{tuple_delimiter}"배터리 효율화를 위한 구체적 알고리즘이므로 solution"){record_delimiter}
+("entity"{tuple_delimiter}"셀 밸런싱 기법"{tuple_delimiter}"solution"{tuple_delimiter}"배터리 셀 균형을 맞추는 구체적 기법이므로 solution"){record_delimiter}
+("entity"{tuple_delimiter}"배터리 효율 개선"{tuple_delimiter}"achievement"{tuple_delimiter}"시스템을 통해 달성하고자 하는 성과이므로 achievement"){record_delimiter}
 ("relationship"{tuple_delimiter}"SOC 추정 알고리즘"{tuple_delimiter}"전기자동차용 배터리 관리 시스템"{tuple_delimiter}"SOC 추정 알고리즘이 배터리 관리 시스템에 적용됨"{tuple_delimiter}"배터리 충전량 추정, BMS 핵심 로직"){record_delimiter}
-("relationship"{tuple_delimiter}"셀 밸런싱 기법"{tuple_delimiter}"배터리 효율 최적화"{tuple_delimiter}"셀 밸런싱으로 배터리 효율을 최적화함"{tuple_delimiter}"셀 간 전압 균등화, 배터리 수명 연장"){record_delimiter}
+("relationship"{tuple_delimiter}"셀 밸런싱 기법"{tuple_delimiter}"배터리 효율 개선"{tuple_delimiter}"셀 밸런싱으로 배터리 효율을 개선함"{tuple_delimiter}"셀 간 전압 균등화, 배터리 수명 연장"){record_delimiter}
 {completion_delimiter}
 
 ######################
-Example 3: Objective가 명시되지 않은 케이스
+Example 3: Achievement가 명시되지 않은 케이스
 
 Text:
 BERT 기반 한국어 감성분석 모델을 개발하였다. 기존 모델은 한국어 특성 반영이 부족한 한계가 있었다. KoBERT를 파인튜닝하고 형태소 분석을 전처리에 추가하였다.
 ################
 Output:
-("entity"{tuple_delimiter}"한국어 감성분석 모델"{tuple_delimiter}"research_object"{tuple_delimiter}"본 연구에서 개발하는 감성분석 시스템"){record_delimiter}
-("entity"{tuple_delimiter}"한국어 특성 반영 부족"{tuple_delimiter}"problem"{tuple_delimiter}"기존 모델이 가진 한국어 처리의 한계"){record_delimiter}
-("entity"{tuple_delimiter}"KoBERT 파인튜닝"{tuple_delimiter}"method"{tuple_delimiter}"한국어 사전학습 모델을 미세조정하는 기법"){record_delimiter}
-("entity"{tuple_delimiter}"형태소 분석 전처리"{tuple_delimiter}"method"{tuple_delimiter}"한국어 특성을 반영한 텍스트 전처리 방법"){record_delimiter}
-("relationship"{tuple_delimiter}"한국어 감성분석 모델"{tuple_delimiter}"한국어 특성 반영 부족"{tuple_delimiter}"기존 감성분석 모델이 한국어 특성 반영에 한계가 있음"{tuple_delimiter}"감성분석 모델 한계, 한국어 언어 특성"){record_delimiter}
+("entity"{tuple_delimiter}"한국어 감성분석 모델"{tuple_delimiter}"target"{tuple_delimiter}"연구가 개발하고자 하는 핵심 대상이므로 target"){record_delimiter}
+("entity"{tuple_delimiter}"한국어 특성 반영 부족"{tuple_delimiter}"problem"{tuple_delimiter}"기존 모델의 한계를 나타내는 부정적 현상이므로 problem"){record_delimiter}
+("entity"{tuple_delimiter}"KoBERT 파인튜닝"{tuple_delimiter}"solution"{tuple_delimiter}"한국어 특성 문제를 해결하기 위한 구체적 기법이므로 solution"){record_delimiter}
+("entity"{tuple_delimiter}"형태소 분석 전처리"{tuple_delimiter}"solution"{tuple_delimiter}"한국어 처리를 위한 구체적 전처리 방법이므로 solution"){record_delimiter}
+("relationship"{tuple_delimiter}"한국어 감성분석 모델"{tuple_delimiter}"한국어 특성 반영 부족"{tuple_delimiter}"기존 감성분석 모델이 한국어 특성 반영에 한계가 있음"{tuple_delimiter}"BERT 감성분석 한계, 한국어 형태소 처리"){record_delimiter}
 ("relationship"{tuple_delimiter}"KoBERT 파인튜닝"{tuple_delimiter}"한국어 특성 반영 부족"{tuple_delimiter}"KoBERT 파인튜닝으로 한국어 특성 반영 문제를 해결함"{tuple_delimiter}"KoBERT 기반 파인튜닝, 한국어 특화 모델 개선"){record_delimiter}
 {completion_delimiter}
 
 ######################
-Example 4: Problem과 Objective 둘 다 없는 케이스
+Example 4: Problem과 Achievement 둘 다 없는 케이스
 
 Text:
 본 연구는 딥러닝 기반 의료영상 분할 기술을 개발한다. U-Net 아키텍처와 어텐션 메커니즘을 결합하여 CT 영상에서 장기를 자동 분할한다.
 ################
 Output:
-("entity"{tuple_delimiter}"의료영상 분할 기술"{tuple_delimiter}"research_object"{tuple_delimiter}"본 연구에서 개발하는 영상 처리 기술"){record_delimiter}
-("entity"{tuple_delimiter}"CT 영상"{tuple_delimiter}"research_object"{tuple_delimiter}"분할 대상이 되는 의료 영상 데이터"){record_delimiter}
-("entity"{tuple_delimiter}"U-Net 아키텍처"{tuple_delimiter}"method"{tuple_delimiter}"의료영상 분할에 사용되는 딥러닝 구조"){record_delimiter}
-("entity"{tuple_delimiter}"어텐션 메커니즘"{tuple_delimiter}"method"{tuple_delimiter}"중요 영역에 집중하는 딥러닝 기법"){record_delimiter}
-("relationship"{tuple_delimiter}"U-Net 아키텍처"{tuple_delimiter}"의료영상 분할 기술"{tuple_delimiter}"U-Net이 의료영상 분할의 기반 구조로 사용됨"{tuple_delimiter}"U-Net 기반 영상 분할, 딥러닝 아키텍처"){record_delimiter}
-("relationship"{tuple_delimiter}"어텐션 메커니즘"{tuple_delimiter}"U-Net 아키텍처"{tuple_delimiter}"어텐션 메커니즘이 U-Net과 결합되어 사용됨"{tuple_delimiter}"어텐션 메커니즘 결합, U-Net 성능 강화"){record_delimiter}
+("entity"{tuple_delimiter}"의료영상 자동 분할"{tuple_delimiter}"target"{tuple_delimiter}"연구가 개발하고자 하는 핵심 대상이므로 target"){record_delimiter}
+("entity"{tuple_delimiter}"CT 영상"{tuple_delimiter}"target"{tuple_delimiter}"분할의 대상이 되는 데이터이므로 target"){record_delimiter}
+("entity"{tuple_delimiter}"U-Net 아키텍처"{tuple_delimiter}"solution"{tuple_delimiter}"영상 분할을 위한 구체적 딥러닝 구조이므로 solution"){record_delimiter}
+("entity"{tuple_delimiter}"어텐션 메커니즘"{tuple_delimiter}"solution"{tuple_delimiter}"성능 향상을 위한 구체적 딥러닝 기법이므로 solution"){record_delimiter}
+("relationship"{tuple_delimiter}"U-Net 아키텍처"{tuple_delimiter}"의료영상 자동 분할"{tuple_delimiter}"U-Net이 의료영상 분할의 기반 구조로 사용됨"{tuple_delimiter}"U-Net 기반 의료영상 분할, CT 장기 인식"){record_delimiter}
+("relationship"{tuple_delimiter}"어텐션 메커니즘"{tuple_delimiter}"U-Net 아키텍처"{tuple_delimiter}"어텐션 메커니즘이 U-Net과 결합되어 사용됨"{tuple_delimiter}"어텐션 U-Net 결합, 의료영상 분할 정확도"){record_delimiter}
 {completion_delimiter}
 
 ######################
@@ -137,16 +162,41 @@ Text:
 자율주행 차량의 LiDAR 포인트 클라우드 처리 시스템을 연구하였다. 기존 처리 방식은 실시간성 확보가 어려운 문제가 있었다. PointNet++ 기반 경량화 모델과 병렬 처리 파이프라인을 개발하여 처리 속도를 10배 향상시키고 메모리 사용량을 50% 절감하였다.
 ################
 Output:
-("entity"{tuple_delimiter}"LiDAR 포인트 클라우드 처리 시스템"{tuple_delimiter}"research_object"{tuple_delimiter}"자율주행 차량용 3D 센서 데이터 처리 시스템"){record_delimiter}
-("entity"{tuple_delimiter}"실시간성 확보 어려움"{tuple_delimiter}"problem"{tuple_delimiter}"기존 처리 방식의 속도 관련 한계"){record_delimiter}
-("entity"{tuple_delimiter}"PointNet++ 기반 경량화 모델"{tuple_delimiter}"method"{tuple_delimiter}"포인트 클라우드 처리를 위한 경량 딥러닝 모델"){record_delimiter}
-("entity"{tuple_delimiter}"병렬 처리 파이프라인"{tuple_delimiter}"method"{tuple_delimiter}"처리 속도 향상을 위한 병렬화 구조"){record_delimiter}
-("entity"{tuple_delimiter}"처리 속도 10배 향상"{tuple_delimiter}"objective"{tuple_delimiter}"연구를 통해 달성한 속도 개선 효과"){record_delimiter}
-("entity"{tuple_delimiter}"메모리 사용량 50% 절감"{tuple_delimiter}"objective"{tuple_delimiter}"연구를 통해 달성한 자원 효율화 효과"){record_delimiter}
+("entity"{tuple_delimiter}"LiDAR 포인트 클라우드 처리 시스템"{tuple_delimiter}"target"{tuple_delimiter}"연구가 해결하고자 하는 핵심 대상 시스템이므로 target"){record_delimiter}
+("entity"{tuple_delimiter}"실시간성 확보 어려움"{tuple_delimiter}"problem"{tuple_delimiter}"기존 처리 방식의 한계를 나타내는 부정적 현상이므로 problem"){record_delimiter}
+("entity"{tuple_delimiter}"PointNet++ 기반 경량화 모델"{tuple_delimiter}"solution"{tuple_delimiter}"실시간성 문제를 해결하기 위한 구체적 딥러닝 모델이므로 solution"){record_delimiter}
+("entity"{tuple_delimiter}"병렬 처리 파이프라인"{tuple_delimiter}"solution"{tuple_delimiter}"속도 향상을 위한 구체적 처리 구조이므로 solution"){record_delimiter}
+("entity"{tuple_delimiter}"처리 속도 10배 향상"{tuple_delimiter}"achievement"{tuple_delimiter}"제안된 방법으로 달성한 정량적 성과이므로 achievement"){record_delimiter}
+("entity"{tuple_delimiter}"메모리 사용량 50% 절감"{tuple_delimiter}"achievement"{tuple_delimiter}"제안된 방법으로 달성한 정량적 성과이므로 achievement"){record_delimiter}
 ("relationship"{tuple_delimiter}"LiDAR 포인트 클라우드 처리 시스템"{tuple_delimiter}"실시간성 확보 어려움"{tuple_delimiter}"기존 처리 시스템이 실시간 처리에 한계가 있음"{tuple_delimiter}"LiDAR 데이터 처리 한계, 실시간성 병목"){record_delimiter}
 ("relationship"{tuple_delimiter}"PointNet++ 기반 경량화 모델"{tuple_delimiter}"실시간성 확보 어려움"{tuple_delimiter}"경량화 모델로 실시간성 문제를 해결함"{tuple_delimiter}"포인트 클라우드 경량화, 실시간 LiDAR 처리"){record_delimiter}
 ("relationship"{tuple_delimiter}"병렬 처리 파이프라인"{tuple_delimiter}"처리 속도 10배 향상"{tuple_delimiter}"병렬 처리로 속도가 10배 향상됨"{tuple_delimiter}"병렬 연산 파이프라인, LiDAR 데이터 고속 처리"){record_delimiter}
-("relationship"{tuple_delimiter}"PointNet++ 기반 경량화 모델"{tuple_delimiter}"메모리 사용량 50% 절감"{tuple_delimiter}"경량화 모델로 메모리 사용이 절감됨"{tuple_delimiter}"PointNet++ 모델 경량화, 메모리 효율 개선"){record_delimiter}
+("relationship"{tuple_delimiter}"PointNet++ 기반 경량화 모델"{tuple_delimiter}"메모리 사용량 50% 절감"{tuple_delimiter}"경량화 모델로 메모리 사용이 절감됨"{tuple_delimiter}"PointNet++ 모델 경량화, 자율주행 메모리 최적화"){record_delimiter}
+{completion_delimiter}
+
+######################
+Example 6: ❌ Negative Example - 이렇게 하면 안 됩니다
+
+Text:
+본 연구에서는 새로운 기술을 개발하여 시스템의 성능을 향상시켰다. 기존 방법은 한계가 있어 분석과 처리에 어려움이 있었다. 연구팀은 개선된 방법을 적용하여 효율을 최적화하였다.
+################
+잘못된 Output (❌ BLACKLIST 위반):
+("entity"{tuple_delimiter}"기술"{tuple_delimiter}"target"{tuple_delimiter}"연구에서 개발한 기술")
+("entity"{tuple_delimiter}"시스템"{tuple_delimiter}"target"{tuple_delimiter}"성능을 향상시킨 시스템")
+("entity"{tuple_delimiter}"한계"{tuple_delimiter}"problem"{tuple_delimiter}"기존 방법의 한계")
+("entity"{tuple_delimiter}"어려움"{tuple_delimiter}"problem"{tuple_delimiter}"분석과 처리의 어려움")
+("entity"{tuple_delimiter}"방법"{tuple_delimiter}"solution"{tuple_delimiter}"개선된 방법")
+("entity"{tuple_delimiter}"성능 향상"{tuple_delimiter}"achievement"{tuple_delimiter}"시스템의 성능 향상")
+("entity"{tuple_delimiter}"효율 최적화"{tuple_delimiter}"achievement"{tuple_delimiter}"달성한 효율 최적화")
+
+이유:
+- "기술", "시스템", "방법"은 BLACKLIST 공통 금지 단어
+- "한계", "어려움"은 problem 타입 금지 단어
+- "성능 향상", "효율 최적화"는 achievement 타입 금지 단어
+- 모두 검색 변별력이 없는 범용 표현
+
+올바른 Output (✓):
+(엔티티 추출 없음 - 텍스트에 구체적인 기술 용어가 없으므로 추출하지 않음)
 {completion_delimiter}
 
 ######################
@@ -176,10 +226,15 @@ KEYWORD_EXTRACTION_PROMPT = """---Goal---
 1. low_level: 쿼리 원문에 있는 기술 용어만 추출 (추론/연상 금지)
 2. high_level: 쿼리 의도를 "~기반", "~분석", "~개선", "~검출" 등의 형태로 요약
 3. 복합 명사 유지: 의미적으로 연결된 명사는 하나로 ("의료영상", "행동 분석")
-4. 제외 (절대 추출 금지):
-   - 1글자 단어: "문", "관", "기", "물" 등 단독 사용 금지 (복합 명사로만 사용)
-   - 일반 표현: "기술", "개발", "연구", "기술 개발", "연구 개발"
-   - 요청 표현: "교수님", "전문가", "찾아줘", "알려줘", "필요해요", "하고 싶어요"
+4. 1글자 단어 금지: "문", "관", "기", "물" 등 단독 사용 금지 (복합 명사로만 사용)
+5. 요청 표현 제외: "교수님", "전문가", "찾아줘", "알려줘", "필요해요", "하고 싶어요"
+
+---BLACKLIST (MUST NOT extract)---
+아래 단어는 검색 성능을 저하시키므로 절대 추출하지 마세요:
+"기술", "개발", "연구", "기술 개발", "연구 개발", "기술개발", "연구개발", "방법", "시스템", "분석", "처리"
+
+위 단어가 쿼리에 있어도 low_level_keywords에 포함하면 안 됩니다.
+단, "감성분석", "행동 분석"처럼 도메인 특화 복합어는 허용됩니다.
 
 ---Output---
 JSON 형식, 한국어, low_level 1-5개, high_level 1-2개
@@ -191,8 +246,9 @@ Output: {{"low_level_keywords": ["용접 불량", "자동 검출"], "high_level_
 Query: "전기차 배터리 충전 시간이 너무 오래 걸려서 단축하고 싶어요"
 Output: {{"low_level_keywords": ["전기차 배터리", "충전 시간"], "high_level_keywords": ["배터리 충전 효율 향상", "급속 충전 기술"]}}
 
-Query: "투자자가 어떻게 행동하는지 분석하는 기술이 필요해요"
+Query: "투자자가 어떻게 행동하는지 분석하는 기술 개발 연구를 찾고 있어요"
 Output: {{"low_level_keywords": ["투자자", "행동 분석"], "high_level_keywords": ["투자자 행동 패턴 분석", "금융 데이터 분석"]}}
+(Note: "기술 개발", "연구"는 BLACKLIST이므로 제외됨)
 
 Query: "CT 영상에서 폐 결절을 자동으로 찾아내고 싶어요"
 Output: {{"low_level_keywords": ["CT 영상", "폐 결절"], "high_level_keywords": ["의료영상 기반 폐 결절 검출", "CAD 기반 진단"]}}
@@ -202,12 +258,17 @@ Output: {{"low_level_keywords": ["고객 리뷰", "감성분석"], "high_level_k
 
 Query: "하천 범람을 미리 예측하는 시스템이 필요합니다"
 Output: {{"low_level_keywords": ["하천 범람", "예측"], "high_level_keywords": ["홍수 예측 모델", "수문 데이터 기반 예측"]}}
+(Note: "시스템"은 BLACKLIST이므로 제외됨)
 
 Query: "스마트팜에 IoT 센서 적용해서 작물 생육 모니터링 하려는데요"
 Output: {{"low_level_keywords": ["스마트팜", "IoT 센서", "작물 생육 모니터링"], "high_level_keywords": ["IoT 기반 생육 모니터링", "정밀 농업 시스템"]}}
 
 Query: "건설현장에서 안전사고를 미리 예측하고 예방할 수 있는 AI 찾고 있어요"
 Output: {{"low_level_keywords": ["건설현장", "안전사고", "AI"], "high_level_keywords": ["AI 기반 안전사고 예측", "건설현장 위험 관리"]}}
+
+Query: "배터리 실리콘 전극이 잘 붙게 하는 기술 개발 연구를 찾고 있어요"
+Output: {{"low_level_keywords": ["배터리", "실리콘 전극"], "high_level_keywords": ["실리콘 전극 접착 기술 개선", "배터리 성능 향상"]}}
+(Note: "기술 개발", "연구"는 BLACKLIST이므로 제외됨)
 
 ######################
 Query: {query}

@@ -76,3 +76,9 @@ htmlcov/
 .claude/
 CLAUDE_PROJECT_GUIDE.md
 .mcp.json
+
+# Docs (실험 문서)
+docs/
+
+# Scripts (분석 스크립트)
+scripts/analyze_graph.py
