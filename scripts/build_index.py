@@ -68,6 +68,8 @@ class IndexBuilder:
             "docs_processed": 0,
             "entities_extracted": 0,
             "relations_extracted": 0,
+            "entities_after_merge": 0,
+            "relations_after_merge": 0,
             "chunks_stored": 0,
             "errors": 0
         }
@@ -167,6 +169,104 @@ class IndexBuilder:
         logger.info(f"Extracted {len(all_entities)} entities, {len(all_relations)} relations")
 
         return all_entities, all_relations
+
+    def merge_duplicate_relations(self, relations: List[Dict]) -> List[Dict]:
+        """
+        중복 관계 병합 (LightRAG 방식)
+
+        동일한 source-target 쌍의 관계를 병합:
+        - keywords: 중복 제거 후 합침
+        - description: 연결
+        - weight: 최대값 유지
+        """
+        if not relations:
+            return relations
+
+        merged = {}
+
+        for r in relations:
+            # 키 생성: source|target (정렬로 방향 무관하게 처리)
+            src = r.get("source_entity", "")
+            tgt = r.get("target_entity", "")
+            normalized_src, normalized_tgt = sorted([src, tgt])
+            key = f"{normalized_src}|{normalized_tgt}"
+
+            if key not in merged:
+                merged[key] = r.copy()
+            else:
+                existing = merged[key]
+
+                # keywords 병합 (중복 제거 후 합침)
+                old_kw = set(k.strip() for k in existing.get("keywords", "").split(",") if k.strip())
+                new_kw = set(k.strip() for k in r.get("keywords", "").split(",") if k.strip())
+                existing["keywords"] = ",".join(sorted(old_kw | new_kw))
+
+                # description 연결 (중복 제거)
+                old_desc = existing.get("description", "")
+                new_desc = r.get("description", "")
+                if new_desc and new_desc not in old_desc:
+                    existing["description"] = f"{old_desc}\n{new_desc}".strip()
+
+                # weight 최대값 유지
+                existing["weight"] = max(
+                    existing.get("weight", 1),
+                    r.get("weight", 1)
+                )
+
+                # source_doc_id 병합 (여러 문서에서 추출된 경우)
+                old_doc_ids = set(existing.get("source_doc_id", "").split(","))
+                new_doc_id = r.get("source_doc_id", "")
+                if new_doc_id:
+                    old_doc_ids.add(new_doc_id)
+                existing["source_doc_id"] = ",".join(sorted(old_doc_ids - {""}))
+
+        merged_relations = list(merged.values())
+
+        logger.info(f"Merged relations: {len(relations)} -> {len(merged_relations)} (removed {len(relations) - len(merged_relations)} duplicates)")
+
+        return merged_relations
+
+    def merge_duplicate_entities(self, entities: List[Dict]) -> List[Dict]:
+        """
+        중복 엔티티 병합 (LightRAG 방식)
+
+        동일한 name의 엔티티를 병합:
+        - description: 연결
+        - entity_type: 첫 번째 유지
+        """
+        if not entities:
+            return entities
+
+        merged = {}
+
+        for e in entities:
+            name = e.get("name", "").strip()
+            if not name:
+                continue
+
+            if name not in merged:
+                merged[name] = e.copy()
+            else:
+                existing = merged[name]
+
+                # description 연결 (중복 제거)
+                old_desc = existing.get("description", "")
+                new_desc = e.get("description", "")
+                if new_desc and new_desc not in old_desc:
+                    existing["description"] = f"{old_desc}\n{new_desc}".strip()
+
+                # source_doc_id 병합
+                old_doc_ids = set(existing.get("source_doc_id", "").split(","))
+                new_doc_id = e.get("source_doc_id", "")
+                if new_doc_id:
+                    old_doc_ids.add(new_doc_id)
+                existing["source_doc_id"] = ",".join(sorted(old_doc_ids - {""}))
+
+        merged_entities = list(merged.values())
+
+        logger.info(f"Merged entities: {len(entities)} -> {len(merged_entities)} (removed {len(entities) - len(merged_entities)} duplicates)")
+
+        return merged_entities
 
     def generate_embeddings(
         self,
@@ -311,6 +411,14 @@ class IndexBuilder:
             if not entities:
                 logger.warning("No entities extracted. Stopping.")
                 return
+
+            # 3.5 중복 병합 (LightRAG 방식)
+            entities = self.merge_duplicate_entities(entities)
+            relations = self.merge_duplicate_relations(relations)
+
+            # 병합 후 통계 업데이트
+            self.stats["entities_after_merge"] = len(entities)
+            self.stats["relations_after_merge"] = len(relations)
 
             # 체크포인트 저장
             logger.info(f"Saving checkpoint to {checkpoint_file}...")

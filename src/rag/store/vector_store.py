@@ -177,13 +177,21 @@ class ChromaVectorStore:
         ids = []
         documents = []
         metadatas = []
+        valid_indices = []  # 중복 제거를 위한 유효 인덱스
+        seen_ids = set()
 
         for i, relation in enumerate(relations):
             # 고유 ID 생성
             rel_id = f"{doc_type}_r_{relation['source_entity']}_{relation['target_entity']}_{relation['source_doc_id']}"
             rel_id = rel_id.replace(" ", "_")[:100]
 
+            # 중복 ID 건너뛰기
+            if rel_id in seen_ids:
+                continue
+            seen_ids.add(rel_id)
+
             ids.append(rel_id)
+            valid_indices.append(i)
 
             # LightRAG 방식: keywords를 맨 앞에 배치
             keywords = relation.get("keywords", "")
@@ -199,11 +207,13 @@ class ChromaVectorStore:
                 "doc_type": doc_type
             })
 
+        # 유효한 인덱스의 임베딩만 추출
         embeddings_list = embeddings.tolist() if isinstance(embeddings, np.ndarray) else embeddings
+        filtered_embeddings = [embeddings_list[i] for i in valid_indices]
 
         collection.upsert(
             ids=ids,
-            embeddings=embeddings_list,
+            embeddings=filtered_embeddings,
             documents=documents,
             metadatas=metadatas
         )
