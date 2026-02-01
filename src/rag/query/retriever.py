@@ -37,7 +37,9 @@ class HybridRetriever:
     def __init__(
         self,
         doc_types: List[str] = None,
-        force_api: bool = False
+        force_api: bool = False,
+        embedder: Embedder = None,
+        vector_store: ChromaVectorStore = None
     ):
         """
         Hybrid 검색기 초기화
@@ -45,6 +47,8 @@ class HybridRetriever:
         Args:
             doc_types: 검색할 문서 타입 리스트 (기본: patent, article, project)
             force_api: OpenAI API 강제 사용 여부
+            embedder: 외부에서 주입할 Embedder 인스턴스 (None이면 내부 생성)
+            vector_store: 외부에서 주입할 ChromaVectorStore 인스턴스 (None이면 내부 생성)
         """
         self.doc_types = doc_types or ["patent", "article", "project"]
 
@@ -52,11 +56,11 @@ class HybridRetriever:
         self.llm_client = OpenAI(api_key=OPENAI_API_KEY)
         self.llm_model = LLM_MODEL
 
-        # 임베딩 모델
-        self.embedder = Embedder(force_api=force_api)
+        # 임베딩 모델 (외부 주입 또는 내부 생성)
+        self.embedder = embedder or Embedder(force_api=force_api)
 
-        # 벡터/그래프 저장소
-        self.vector_store = ChromaVectorStore()
+        # 벡터/그래프 저장소 (외부 주입 또는 내부 생성)
+        self.vector_store = vector_store or ChromaVectorStore()
         self.graph_stores = {
             doc_type: GraphStore(doc_type=doc_type)
             for doc_type in self.doc_types

@@ -17,6 +17,42 @@ from config.settings import OPENAI_API_KEY
 from src.utils.cost_tracker import get_cost_tracker
 
 
+# ===== Streamlit 캐시 함수 (임베딩 모델, 벡터 저장소 등 최초 1회만 로드) =====
+@st.cache_resource
+def get_embedder(force_api: bool = False):
+    """임베딩 모델 캐시 (최초 1회만 로드)"""
+    from src.rag.embedding.embedder import Embedder
+    print("임베딩 모델 로드 중... (최초 1회)")
+    return Embedder(force_api=force_api)
+
+
+@st.cache_resource
+def get_vector_store():
+    """ChromaDB 벡터 저장소 캐시 (최초 1회만 로드)"""
+    from src.rag.store.vector_store import ChromaVectorStore
+    print("벡터 저장소 로드 중... (최초 1회)")
+    return ChromaVectorStore()
+
+
+@st.cache_resource
+def get_retriever(_embedder, _vector_store, doc_types_tuple: tuple):
+    """
+    HybridRetriever 캐시 (doc_types별로 캐시)
+
+    Args:
+        _embedder: 캐시된 Embedder (언더스코어로 시작하면 해시하지 않음)
+        _vector_store: 캐시된 ChromaVectorStore
+        doc_types_tuple: 문서 타입 튜플 (리스트는 해시 불가하므로 튜플로 변환)
+    """
+    from src.rag.query.retriever import HybridRetriever
+    print(f"HybridRetriever 생성 중... (doc_types: {doc_types_tuple})")
+    return HybridRetriever(
+        doc_types=list(doc_types_tuple),
+        embedder=_embedder,
+        vector_store=_vector_store
+    )
+
+
 # 페이지 설정
 st.set_page_config(
     page_title="INU LLM RAG Matching Engine - 리포트 생성",
@@ -117,19 +153,28 @@ with tab1:
             status_text = st.empty()
 
             try:
-                status_text.text("ReportGenerator 초기화 중...")
+                # 캐시된 리소스 가져오기 (최초 1회만 실제 로드)
+                with st.spinner("임베딩 모델 및 벡터 저장소 로드 중... (최초 실행 시에만 시간이 소요됩니다)"):
+                    embedder = get_embedder()
+                    vector_store = get_vector_store()
+                    retriever = get_retriever(embedder, vector_store, tuple(doc_types))
+
                 progress_bar.progress(10)
+
+                status_text.text("ReportGenerator 초기화 중...")
+                progress_bar.progress(20)
 
                 generator = ReportGenerator(api_key=api_key)
 
                 status_text.text("RAG 검색 수행 중...")
                 progress_bar.progress(30)
 
-                # 전체 파이프라인 실행 (내부에서 비용 추적)
+                # 전체 파이프라인 실행 (캐시된 retriever 사용)
                 report_data = generator.generate_report_from_query(
                     query=query,
                     doc_types=doc_types,
-                    few_shot_examples=few_shot_examples
+                    few_shot_examples=few_shot_examples,
+                    retriever=retriever
                 )
 
                 progress_bar.progress(90)

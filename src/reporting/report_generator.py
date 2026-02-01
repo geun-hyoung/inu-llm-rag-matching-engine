@@ -46,7 +46,8 @@ class ReportGenerator:
         query: str,
         doc_types: List[str] = None,
         few_shot_examples: Optional[List[Dict[str, Any]]] = None,
-        retrieval_top_k: int = None
+        retrieval_top_k: int = None,
+        retriever = None
     ) -> Dict[str, Any]:
         """
         쿼리를 기반으로 전체 파이프라인 실행 (RAG → AHP → 리포트 생성)
@@ -56,6 +57,7 @@ class ReportGenerator:
             doc_types: 검색할 문서 타입 리스트 (기본: ["patent", "article", "project"])
             few_shot_examples: 보고서 생성용 Few-shot 예시 리스트
             retrieval_top_k: Local/Global 검색 시 각각 가져올 개수 (기본: 5)
+            retriever: 외부에서 주입할 HybridRetriever 인스턴스 (None이면 내부 생성)
 
         Returns:
             생성된 리포트 데이터 딕셔너리
@@ -74,9 +76,10 @@ class ReportGenerator:
         from config.settings import RETRIEVAL_TOP_K, SIMILARITY_THRESHOLD
         from config.ahp_config import DEFAULT_TYPE_WEIGHTS
 
-        # 1. RAG 검색
+        # 1. RAG 검색 (외부 주입 또는 내부 생성)
         print("RAG 검색 수행 중...")
-        retriever = HybridRetriever(doc_types=doc_types)
+        if retriever is None:
+            retriever = HybridRetriever(doc_types=doc_types)
         raw_rag_results = retriever.retrieve(
             query=query,
             retrieval_top_k=retrieval_top_k or RETRIEVAL_TOP_K,
