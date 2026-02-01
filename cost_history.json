@@ -1,0 +1,478 @@
+{
+  "created_at": "2026-01-29T22:55:16.579017",
+  "history": [
+    {
+      "timestamp": "2026-01-29T22:55:16.579017",
+      "task": "indexing",
+      "description": "patent 문서 인덱싱",
+      "components": {
+        "entity_extraction": {
+          "calls": 94,
+          "input_tokens": 365095,
+          "output_tokens": 45062,
+          "cost_usd": 0.08180145000000003
+        }
+      },
+      "total_cost_usd": 0.08180145000000003,
+      "metadata": {
+        "docs_processed": 94,
+        "entities_extracted": 537,
+        "relations_extracted": 383,
+        "entities_after_merge": 525,
+        "relations_after_merge": 381,
+        "chunks_stored": 94,
+        "errors": 0
+      }
+    },
+    {
+      "timestamp": "2026-01-29T23:13:27.119689",
+      "task": "indexing",
+      "description": "article 문서 인덱싱",
+      "components": {
+        "entity_extraction": {
+          "calls": 97,
+          "input_tokens": 380419,
+          "output_tokens": 47235,
+          "cost_usd": 0.08540385000000005
+        }
+      },
+      "total_cost_usd": 0.08540385000000005,
+      "metadata": {
+        "docs_processed": 97,
+        "entities_extracted": 602,
+        "relations_extracted": 415,
+        "entities_after_merge": 599,
+        "relations_after_merge": 415,
+        "chunks_stored": 97,
+        "errors": 0
+      }
+    },
+    {
+      "timestamp": "2026-01-29T23:31:32.126751",
+      "task": "indexing",
+      "description": "project 문서 인덱싱",
+      "components": {
+        "entity_extraction": {
+          "calls": 121,
+          "input_tokens": 529749,
+          "output_tokens": 97779,
+          "cost_usd": 0.13812975000000002
+        }
+      },
+      "total_cost_usd": 0.13812975000000002,
+      "metadata": {
+        "docs_processed": 121,
+        "entities_extracted": 1157,
+        "relations_extracted": 809,
+        "entities_after_merge": 935,
+        "relations_after_merge": 735,
+        "chunks_stored": 121,
+        "errors": 0
+      }
+    },
+    {
+      "timestamp": "2026-01-30T00:56:13.040949",
+      "task": "evaluation",
+      "description": "Retrieval 평가",
+      "components": {
+        "keyword_extraction": {
+          "calls": 35,
+          "input_tokens": 40603,
+          "output_tokens": 1469,
+          "cost_usd": 0.006971849999999998
+        },
+        "noise_rate_eval": {
+          "calls": 734,
+          "input_tokens": 671323,
+          "output_tokens": 70024,
+          "cost_usd": 0.14271284999999978
+        }
+      },
+      "total_cost_usd": 0.14968469999999978,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-01-30T01:37:15.959420",
+      "task": "indexing",
+      "description": "patent 문서 인덱싱",
+      "components": {
+        "entity_extraction": {
+          "calls": 1,
+          "input_tokens": 4019,
+          "output_tokens": 1109,
+          "cost_usd": 0.0012682499999999998
+        },
+        "embedding": {
+          "calls": 3,
+          "input_tokens": 1828,
+          "output_tokens": 0,
+          "cost_usd": 3.656e-05
+        }
+      },
+      "total_cost_usd": 0.0013048099999999998,
+      "metadata": {
+        "docs_processed": 1,
+        "entities_extracted": 14,
+        "relations_extracted": 10,
+        "entities_after_merge": 14,
+        "relations_after_merge": 10,
+        "chunks_stored": 1,
+        "errors": 0
+      }
+    },
+    {
+      "timestamp": "2026-01-30T01:38:01.655886",
+      "task": "indexing",
+      "description": "project 문서 인덱싱",
+      "components": {
+        "entity_extraction": {
+          "calls": 1,
+          "input_tokens": 4992,
+          "output_tokens": 900,
+          "cost_usd": 0.0012888
+        },
+        "embedding": {
+          "calls": 3,
+          "input_tokens": 3183,
+          "output_tokens": 0,
+          "cost_usd": 6.366e-05
+        }
+      },
+      "total_cost_usd": 0.0013524600000000002,
+      "metadata": {
+        "docs_processed": 1,
+        "entities_extracted": 10,
+        "relations_extracted": 7,
+        "entities_after_merge": 10,
+        "relations_after_merge": 7,
+        "chunks_stored": 1,
+        "errors": 0
+      }
+    },
+    {
+      "timestamp": "2026-01-30T01:39:46.115116",
+      "task": "indexing",
+      "description": "patent 문서 인덱싱",
+      "components": {
+        "entity_extraction": {
+          "calls": 1,
+          "input_tokens": 4019,
+          "output_tokens": 1182,
+          "cost_usd": 0.00131205
+        },
+        "embedding": {
+          "calls": 3,
+          "input_tokens": 1925,
+          "output_tokens": 0,
+          "cost_usd": 3.85e-05
+        }
+      },
+      "total_cost_usd": 0.0013505499999999998,
+      "metadata": {
+        "docs_processed": 1,
+        "entities_extracted": 13,
+        "relations_extracted": 10,
+        "entities_after_merge": 13,
+        "relations_after_merge": 10,
+        "chunks_stored": 1,
+        "errors": 0
+      }
+    },
+    {
+      "timestamp": "2026-01-30T01:40:15.695761",
+      "task": "indexing",
+      "description": "article 문서 인덱싱",
+      "components": {
+        "entity_extraction": {
+          "calls": 1,
+          "input_tokens": 4307,
+          "output_tokens": 663,
+          "cost_usd": 0.00104385
+        },
+        "embedding": {
+          "calls": 3,
+          "input_tokens": 2024,
+          "output_tokens": 0,
+          "cost_usd": 4.048e-05
+        }
+      },
+      "total_cost_usd": 0.00108433,
+      "metadata": {
+        "docs_processed": 1,
+        "entities_extracted": 8,
+        "relations_extracted": 6,
+        "entities_after_merge": 8,
+        "relations_after_merge": 6,
+        "chunks_stored": 1,
+        "errors": 0
+      }
+    },
+    {
+      "timestamp": "2026-01-30T01:40:45.589054",
+      "task": "indexing",
+      "description": "project 문서 인덱싱",
+      "components": {
+        "entity_extraction": {
+          "calls": 1,
+          "input_tokens": 4992,
+          "output_tokens": 1114,
+          "cost_usd": 0.0014172
+        },
+        "embedding": {
+          "calls": 3,
+          "input_tokens": 3399,
+          "output_tokens": 0,
+          "cost_usd": 6.798e-05
+        }
+      },
+      "total_cost_usd": 0.00148518,
+      "metadata": {
+        "docs_processed": 1,
+        "entities_extracted": 11,
+        "relations_extracted": 9,
+        "entities_after_merge": 11,
+        "relations_after_merge": 9,
+        "chunks_stored": 1,
+        "errors": 0
+      }
+    },
+    {
+      "timestamp": "2026-01-30T01:47:25.188569",
+      "task": "indexing",
+      "description": "patent 문서 인덱싱",
+      "components": {
+        "entity_extraction": {
+          "calls": 1,
+          "input_tokens": 4019,
+          "output_tokens": 1177,
+          "cost_usd": 0.00130905
+        },
+        "embedding": {
+          "calls": 3,
+          "input_tokens": 1953,
+          "output_tokens": 0,
+          "cost_usd": 3.906e-05
+        }
+      },
+      "total_cost_usd": 0.00134811,
+      "metadata": {
+        "docs_processed": 1,
+        "entities_extracted": 14,
+        "relations_extracted": 10,
+        "entities_after_merge": 14,
+        "relations_after_merge": 10,
+        "chunks_stored": 1,
+        "errors": 0
+      }
+    },
+    {
+      "timestamp": "2026-01-30T01:48:11.970713",
+      "task": "indexing",
+      "description": "article 문서 인덱싱",
+      "components": {
+        "entity_extraction": {
+          "calls": 1,
+          "input_tokens": 4307,
+          "output_tokens": 532,
+          "cost_usd": 0.00096525
+        },
+        "embedding": {
+          "calls": 3,
+          "input_tokens": 1856,
+          "output_tokens": 0,
+          "cost_usd": 3.712e-05
+        }
+      },
+      "total_cost_usd": 0.00100237,
+      "metadata": {
+        "docs_processed": 1,
+        "entities_extracted": 6,
+        "relations_extracted": 5,
+        "entities_after_merge": 6,
+        "relations_after_merge": 5,
+        "chunks_stored": 1,
+        "errors": 0
+      }
+    },
+    {
+      "timestamp": "2026-01-30T01:48:39.134064",
+      "task": "indexing",
+      "description": "project 문서 인덱싱",
+      "components": {
+        "entity_extraction": {
+          "calls": 1,
+          "input_tokens": 4992,
+          "output_tokens": 968,
+          "cost_usd": 0.0013296
+        },
+        "embedding": {
+          "calls": 3,
+          "input_tokens": 3297,
+          "output_tokens": 0,
+          "cost_usd": 6.594e-05
+        }
+      },
+      "total_cost_usd": 0.00139554,
+      "metadata": {
+        "docs_processed": 1,
+        "entities_extracted": 10,
+        "relations_extracted": 7,
+        "entities_after_merge": 10,
+        "relations_after_merge": 7,
+        "chunks_stored": 1,
+        "errors": 0
+      }
+    },
+    {
+      "timestamp": "2026-01-30T01:53:56.353234",
+      "task": "indexing",
+      "description": "patent 문서 인덱싱",
+      "components": {
+        "entity_extraction": {
+          "calls": 1,
+          "input_tokens": 4019,
+          "output_tokens": 1248,
+          "cost_usd": 0.0013516499999999998
+        }
+      },
+      "total_cost_usd": 0.0013516499999999998,
+      "metadata": {
+        "docs_processed": 1,
+        "entities_extracted": 13,
+        "relations_extracted": 12,
+        "entities_after_merge": 13,
+        "relations_after_merge": 12,
+        "chunks_stored": 1,
+        "errors": 0
+      }
+    },
+    {
+      "timestamp": "2026-01-30T01:54:48.805552",
+      "task": "indexing",
+      "description": "article 문서 인덱싱",
+      "components": {
+        "entity_extraction": {
+          "calls": 1,
+          "input_tokens": 4307,
+          "output_tokens": 507,
+          "cost_usd": 0.0009502499999999999
+        }
+      },
+      "total_cost_usd": 0.0009502499999999999,
+      "metadata": {
+        "docs_processed": 1,
+        "entities_extracted": 6,
+        "relations_extracted": 4,
+        "entities_after_merge": 6,
+        "relations_after_merge": 4,
+        "chunks_stored": 1,
+        "errors": 0
+      }
+    },
+    {
+      "timestamp": "2026-01-30T01:55:26.953689",
+      "task": "indexing",
+      "description": "project 문서 인덱싱",
+      "components": {
+        "entity_extraction": {
+          "calls": 1,
+          "input_tokens": 4992,
+          "output_tokens": 1111,
+          "cost_usd": 0.0014153999999999998
+        }
+      },
+      "total_cost_usd": 0.0014153999999999998,
+      "metadata": {
+        "docs_processed": 1,
+        "entities_extracted": 11,
+        "relations_extracted": 9,
+        "entities_after_merge": 11,
+        "relations_after_merge": 9,
+        "chunks_stored": 1,
+        "errors": 0
+      }
+    },
+    {
+      "timestamp": "2026-01-30T02:33:59.010825",
+      "task": "indexing",
+      "description": "patent 문서 인덱싱",
+      "components": {
+        "entity_extraction": {
+          "calls": 296,
+          "input_tokens": 1152349,
+          "output_tokens": 144245,
+          "cost_usd": 0.25939935
+        }
+      },
+      "total_cost_usd": 0.25939935,
+      "metadata": {
+        "docs_processed": 296,
+        "entities_extracted": 1745,
+        "relations_extracted": 1195,
+        "entities_after_merge": 1606,
+        "relations_after_merge": 1178,
+        "chunks_stored": 296,
+        "errors": 0
+      }
+    },
+    {
+      "timestamp": "2026-02-01T15:00:09.090666",
+      "task": "indexing",
+      "description": "project 문서 인덱싱",
+      "components": {},
+      "total_cost_usd": 0.0,
+      "metadata": {
+        "docs_processed": 0,
+        "entities_extracted": 0,
+        "relations_extracted": 0,
+        "entities_after_merge": 0,
+        "relations_after_merge": 0,
+        "chunks_stored": 1585,
+        "errors": 0
+      }
+    }
+  ],
+  "totals": {
+    "all_time_cost_usd": 0.7284597500000002,
+    "by_component": {
+      "entity_extraction": {
+        "calls": 619,
+        "input_tokens": 2476577,
+        "output_tokens": 344832,
+        "cost_usd": 0.5783857500000001
+      },
+      "keyword_extraction": {
+        "calls": 35,
+        "input_tokens": 40603,
+        "output_tokens": 1469,
+        "cost_usd": 0.006971849999999998
+      },
+      "noise_rate_eval": {
+        "calls": 734,
+        "input_tokens": 671323,
+        "output_tokens": 70024,
+        "cost_usd": 0.14271284999999978
+      },
+      "embedding": {
+        "calls": 24,
+        "input_tokens": 19465,
+        "output_tokens": 0,
+        "cost_usd": 0.00038930000000000003
+      }
+    },
+    "by_model": {
+      "gpt-4o-mini": {
+        "calls": 1388,
+        "input_tokens": 3188503,
+        "output_tokens": 416325,
+        "cost_usd": 0.7280704500000003
+      },
+      "text-embedding-3-small": {
+        "calls": 24,
+        "input_tokens": 19465,
+        "output_tokens": 0,
+        "cost_usd": 0.00038930000000000003
+      }
+    }
+  }
+}

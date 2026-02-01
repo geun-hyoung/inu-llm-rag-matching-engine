@@ -20,6 +20,9 @@ except ImportError:
     raise
 
 
+# ChromaDB 배치 크기 제한 (최대 5461, 안전하게 5000 사용)
+CHROMADB_MAX_BATCH_SIZE = 5000
+
 # 컬렉션 이름 상수
 COLLECTIONS = {
     # 엔티티/관계 컬렉션 (LightRAG용)
@@ -149,13 +152,17 @@ class ChromaVectorStore:
         # 임베딩을 리스트로 변환
         embeddings_list = embeddings.tolist() if isinstance(embeddings, np.ndarray) else embeddings
 
-        # ChromaDB에 추가 (upsert로 중복 방지)
-        collection.upsert(
-            ids=ids,
-            embeddings=embeddings_list,
-            documents=documents,
-            metadatas=metadatas
-        )
+        # ChromaDB에 배치로 추가 (upsert로 중복 방지)
+        total = len(ids)
+        for i in range(0, total, CHROMADB_MAX_BATCH_SIZE):
+            batch_end = min(i + CHROMADB_MAX_BATCH_SIZE, total)
+            collection.upsert(
+                ids=ids[i:batch_end],
+                embeddings=embeddings_list[i:batch_end],
+                documents=documents[i:batch_end],
+                metadatas=metadatas[i:batch_end]
+            )
+            print(f"  Batch {i//CHROMADB_MAX_BATCH_SIZE + 1}: {batch_end - i} items")
 
         print(f"Added {len(entities)} entities to {collection_name}")
 
@@ -206,12 +213,17 @@ class ChromaVectorStore:
 
         embeddings_list = embeddings.tolist() if isinstance(embeddings, np.ndarray) else embeddings
 
-        collection.upsert(
-            ids=ids,
-            embeddings=embeddings_list,
-            documents=documents,
-            metadatas=metadatas
-        )
+        # ChromaDB에 배치로 추가
+        total = len(ids)
+        for i in range(0, total, CHROMADB_MAX_BATCH_SIZE):
+            batch_end = min(i + CHROMADB_MAX_BATCH_SIZE, total)
+            collection.upsert(
+                ids=ids[i:batch_end],
+                embeddings=embeddings_list[i:batch_end],
+                documents=documents[i:batch_end],
+                metadatas=metadatas[i:batch_end]
+            )
+            print(f"  Batch {i//CHROMADB_MAX_BATCH_SIZE + 1}: {batch_end - i} items")
 
         print(f"Added {len(relations)} relations to {collection_name}")
 
@@ -254,12 +266,17 @@ class ChromaVectorStore:
 
         embeddings_list = embeddings.tolist() if isinstance(embeddings, np.ndarray) else embeddings
 
-        collection.upsert(
-            ids=ids,
-            embeddings=embeddings_list,
-            documents=documents,
-            metadatas=metadatas
-        )
+        # ChromaDB에 배치로 추가
+        total = len(ids)
+        for i in range(0, total, CHROMADB_MAX_BATCH_SIZE):
+            batch_end = min(i + CHROMADB_MAX_BATCH_SIZE, total)
+            collection.upsert(
+                ids=ids[i:batch_end],
+                embeddings=embeddings_list[i:batch_end],
+                documents=documents[i:batch_end],
+                metadatas=metadatas[i:batch_end]
+            )
+            print(f"  Batch {i//CHROMADB_MAX_BATCH_SIZE + 1}: {batch_end - i} items")
 
         print(f"Added {len(chunks)} chunks to {collection_name}")
 
