@@ -446,10 +446,73 @@
         "chunks_stored": 8122,
         "errors": 0
       }
+    },
+    {
+      "timestamp": "2026-02-01T21:18:45.118262",
+      "task": "evaluation",
+      "description": "Retrieval 평가",
+      "components": {
+        "keyword_extraction": {
+          "calls": 35,
+          "input_tokens": 40603,
+          "output_tokens": 1463,
+          "cost_usd": 0.00696825
+        },
+        "noise_rate_eval": {
+          "calls": 966,
+          "input_tokens": 848598,
+          "output_tokens": 94690,
+          "cost_usd": 0.18410369999999962
+        }
+      },
+      "total_cost_usd": 0.19107194999999963,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-01T21:48:00.051440",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 운송 최적화와 관련된 연구를 한 교수님을 찾고있어요...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1158,
+          "output_tokens": 33,
+          "cost_usd": 0.0001935
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6190,
+          "output_tokens": 1530,
+          "cost_usd": 0.0018464999999999998
+        }
+      },
+      "total_cost_usd": 0.0020399999999999997,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-01T21:51:23.337893",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 여러 영상을 하나로 합치는 기술 개발 관련 연구를 찾고...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1156,
+          "output_tokens": 34,
+          "cost_usd": 0.0001938
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6138,
+          "output_tokens": 1461,
+          "cost_usd": 0.0017973
+        }
+      },
+      "total_cost_usd": 0.0019911,
+      "metadata": {}
     }
   ],
   "totals": {
-    "all_time_cost_usd": 0.7284597500000002,
+    "all_time_cost_usd": 0.9235627999999987,
     "by_component": {
       "entity_extraction": {
         "calls": 619,
@@ -458,30 +521,36 @@
         "cost_usd": 0.5783857500000001
       },
       "keyword_extraction": {
-        "calls": 35,
-        "input_tokens": 40603,
-        "output_tokens": 1469,
-        "cost_usd": 0.006971849999999998
+        "calls": 72,
+        "input_tokens": 83520,
+        "output_tokens": 2999,
+        "cost_usd": 0.014327399999999997
       },
       "noise_rate_eval": {
-        "calls": 734,
-        "input_tokens": 671323,
-        "output_tokens": 70024,
-        "cost_usd": 0.14271284999999978
+        "calls": 1700,
+        "input_tokens": 1519921,
+        "output_tokens": 164714,
+        "cost_usd": 0.3268165499999998
       },
       "embedding": {
         "calls": 24,
         "input_tokens": 19465,
         "output_tokens": 0,
         "cost_usd": 0.00038930000000000003
+      },
+      "report_generation": {
+        "calls": 2,
+        "input_tokens": 12328,
+        "output_tokens": 2991,
+        "cost_usd": 0.0036438
       }
     },
     "by_model": {
       "gpt-4o-mini": {
-        "calls": 1388,
-        "input_tokens": 3188503,
-        "output_tokens": 416325,
-        "cost_usd": 0.7280704500000003
+        "calls": 2393,
+        "input_tokens": 4092346,
+        "output_tokens": 515536,
+        "cost_usd": 0.9231734999999988
       },
       "text-embedding-3-small": {
         "calls": 24,
