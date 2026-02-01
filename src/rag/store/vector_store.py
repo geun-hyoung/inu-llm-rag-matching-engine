@@ -4,6 +4,7 @@ ChromaDB 벡터 저장소
 """
 
 import sys
+import hashlib
 from pathlib import Path
 from typing import List, Dict, Optional, Union
 from dataclasses import asdict
@@ -135,9 +136,10 @@ class ChromaVectorStore:
         metadatas = []
 
         for i, entity in enumerate(entities):
-            # 고유 ID 생성: doc_type_entity_name_source_doc_id
-            entity_id = f"{doc_type}_e_{entity['name']}_{entity['source_doc_id']}"
-            entity_id = entity_id.replace(" ", "_")[:100]  # 길이 제한
+            # 고유 ID 생성 (해시 사용으로 중복 방지)
+            raw_id = f"{doc_type}_e_{entity['name']}_{entity['source_doc_id']}"
+            hash_suffix = hashlib.md5(raw_id.encode()).hexdigest()[:8]
+            entity_id = f"{raw_id.replace(' ', '_')[:90]}_{hash_suffix}"
 
             ids.append(entity_id)
             # LightRAG 방식: name + description
@@ -191,9 +193,10 @@ class ChromaVectorStore:
         metadatas = []
 
         for relation in relations:
-            # 고유 ID 생성
-            rel_id = f"{doc_type}_r_{relation['source_entity']}_{relation['target_entity']}_{relation['source_doc_id']}"
-            rel_id = rel_id.replace(" ", "_")[:100]
+            # 고유 ID 생성 (해시 사용으로 중복 방지)
+            raw_id = f"{doc_type}_r_{relation['source_entity']}_{relation['target_entity']}_{relation['source_doc_id']}"
+            hash_suffix = hashlib.md5(raw_id.encode()).hexdigest()[:8]
+            rel_id = f"{raw_id.replace(' ', '_')[:90]}_{hash_suffix}"
 
             ids.append(rel_id)
 
@@ -252,9 +255,10 @@ class ChromaVectorStore:
         metadatas = []
 
         for i, chunk in enumerate(chunks):
-            # 고유 ID: doc_type_chunk_doc_id
-            chunk_id = f"{doc_type}_c_{chunk['doc_id']}"
-            chunk_id = chunk_id.replace(" ", "_")[:100]
+            # 고유 ID (해시 사용으로 중복 방지)
+            raw_id = f"{doc_type}_c_{chunk['doc_id']}"
+            hash_suffix = hashlib.md5(raw_id.encode()).hexdigest()[:8]
+            chunk_id = f"{raw_id.replace(' ', '_')[:90]}_{hash_suffix}"
 
             ids.append(chunk_id)
             documents.append(chunk["text"])
