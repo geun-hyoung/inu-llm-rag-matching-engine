@@ -430,6 +430,22 @@
         "chunks_stored": 1585,
         "errors": 0
       }
+    },
+    {
+      "timestamp": "2026-02-01T18:14:07.505289",
+      "task": "indexing",
+      "description": "article 문서 인덱싱",
+      "components": {},
+      "total_cost_usd": 0.0,
+      "metadata": {
+        "docs_processed": 0,
+        "entities_extracted": 0,
+        "relations_extracted": 0,
+        "entities_after_merge": 0,
+        "relations_after_merge": 0,
+        "chunks_stored": 8122,
+        "errors": 0
+      }
     }
   ],
   "totals": {
