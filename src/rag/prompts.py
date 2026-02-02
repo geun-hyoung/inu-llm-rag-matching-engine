@@ -215,12 +215,14 @@ KEYWORD_EXTRACTION_PROMPT = """---Goal---
 산학협력 매칭을 위한 검색 키워드 추출입니다.
 - 목적: 기업 기술 수요 ↔ 교수 연구 역량 매칭
 - 추출된 키워드로 논문/특허/R&D 과제를 검색합니다.
+- 한글 키워드와 영어 번역을 모두 추출합니다 (영어 논문 검색용).
 
 ---Keywords---
 | 타입 | 정의 | 추출 방식 | 형태 | 예시 |
 |------|------|----------|------|------|
 | low_level | 구체적 기술 용어 | 쿼리 원문에서 그대로 | 명사/명사구 | "CNN", "양극재", "폐 결절" |
 | high_level | 쿼리 의도 요약 | 문장/구 형태로 요약 | ~기반 ~분석, ~개선 등 | "의료영상 기반 진단", "배터리 수명 향상" |
+| *_en | 영어 번역 | 한글 키워드의 정확한 영어 학술 용어 | 영어 명사/구 | "anomaly detection", "machine learning" |
 
 ---Rules---
 1. low_level: 쿼리 원문에 있는 기술 용어만 추출 (추론/연상 금지)
@@ -228,6 +230,7 @@ KEYWORD_EXTRACTION_PROMPT = """---Goal---
 3. 복합 명사 유지: 의미적으로 연결된 명사는 하나로 ("의료영상", "행동 분석")
 4. 1글자 단어 금지: "문", "관", "기", "물" 등 단독 사용 금지 (복합 명사로만 사용)
 5. 요청 표현 제외: "교수님", "전문가", "찾아줘", "알려줘", "필요해요", "하고 싶어요"
+6. 영어 번역: 각 한글 키워드에 대응하는 정확한 영어 학술 용어로 번역 (순서 동일하게 유지)
 
 ---BLACKLIST (MUST NOT extract)---
 아래 단어는 검색 성능을 저하시키므로 절대 추출하지 마세요:
@@ -237,38 +240,26 @@ KEYWORD_EXTRACTION_PROMPT = """---Goal---
 단, "감성분석", "행동 분석"처럼 도메인 특화 복합어는 허용됩니다.
 
 ---Output---
-JSON 형식, 한국어, low_level 1-5개, high_level 1-2개
+JSON 형식, low_level 1-5개, high_level 1-2개, 각각의 영어 번역 포함
 
 ---Examples---
 Query: "공장에서 용접 불량이 자꾸 발생하는데 자동으로 검출하고 싶어요"
-Output: {{"low_level_keywords": ["용접 불량", "자동 검출"], "high_level_keywords": ["용접 결함 자동 검출", "제조 품질 검사"]}}
+Output: {{"low_level_keywords": ["용접 불량", "자동 검출"], "low_level_keywords_en": ["welding defect", "automatic detection"], "high_level_keywords": ["용접 결함 자동 검출", "제조 품질 검사"], "high_level_keywords_en": ["automatic welding defect detection", "manufacturing quality inspection"]}}
+
+Query: "이상치 탐지 및 머신러닝 관련 연구를 찾고 있어요"
+Output: {{"low_level_keywords": ["이상치 탐지", "머신러닝"], "low_level_keywords_en": ["anomaly detection", "machine learning"], "high_level_keywords": ["머신러닝 기반 이상치 탐지", "데이터 기반 이상 패턴 분석"], "high_level_keywords_en": ["machine learning based anomaly detection", "data-driven anomaly pattern analysis"]}}
 
 Query: "전기차 배터리 충전 시간이 너무 오래 걸려서 단축하고 싶어요"
-Output: {{"low_level_keywords": ["전기차 배터리", "충전 시간"], "high_level_keywords": ["배터리 충전 효율 향상", "급속 충전 기술"]}}
-
-Query: "투자자가 어떻게 행동하는지 분석하는 기술 개발 연구를 찾고 있어요"
-Output: {{"low_level_keywords": ["투자자", "행동 분석"], "high_level_keywords": ["투자자 행동 패턴 분석", "금융 데이터 분석"]}}
-(Note: "기술 개발", "연구"는 BLACKLIST이므로 제외됨)
+Output: {{"low_level_keywords": ["전기차 배터리", "충전 시간"], "low_level_keywords_en": ["electric vehicle battery", "charging time"], "high_level_keywords": ["배터리 충전 효율 향상", "급속 충전 기술"], "high_level_keywords_en": ["battery charging efficiency improvement", "fast charging technology"]}}
 
 Query: "CT 영상에서 폐 결절을 자동으로 찾아내고 싶어요"
-Output: {{"low_level_keywords": ["CT 영상", "폐 결절"], "high_level_keywords": ["의료영상 기반 폐 결절 검출", "CAD 기반 진단"]}}
+Output: {{"low_level_keywords": ["CT 영상", "폐 결절"], "low_level_keywords_en": ["CT image", "pulmonary nodule"], "high_level_keywords": ["의료영상 기반 폐 결절 검출", "CAD 기반 진단"], "high_level_keywords_en": ["medical image based pulmonary nodule detection", "CAD-based diagnosis"]}}
 
 Query: "고객 리뷰를 감성분석 하려고 합니다"
-Output: {{"low_level_keywords": ["고객 리뷰", "감성분석"], "high_level_keywords": ["텍스트 기반 감성 분석", "자연어처리 기반 리뷰 분석"]}}
-
-Query: "하천 범람을 미리 예측하는 시스템이 필요합니다"
-Output: {{"low_level_keywords": ["하천 범람", "예측"], "high_level_keywords": ["홍수 예측 모델", "수문 데이터 기반 예측"]}}
-(Note: "시스템"은 BLACKLIST이므로 제외됨)
+Output: {{"low_level_keywords": ["고객 리뷰", "감성분석"], "low_level_keywords_en": ["customer review", "sentiment analysis"], "high_level_keywords": ["텍스트 기반 감성 분석", "자연어처리 기반 리뷰 분석"], "high_level_keywords_en": ["text-based sentiment analysis", "NLP-based review analysis"]}}
 
 Query: "스마트팜에 IoT 센서 적용해서 작물 생육 모니터링 하려는데요"
-Output: {{"low_level_keywords": ["스마트팜", "IoT 센서", "작물 생육 모니터링"], "high_level_keywords": ["IoT 기반 생육 모니터링", "정밀 농업 시스템"]}}
-
-Query: "건설현장에서 안전사고를 미리 예측하고 예방할 수 있는 AI 찾고 있어요"
-Output: {{"low_level_keywords": ["건설현장", "안전사고", "AI"], "high_level_keywords": ["AI 기반 안전사고 예측", "건설현장 위험 관리"]}}
-
-Query: "배터리 실리콘 전극이 잘 붙게 하는 기술 개발 연구를 찾고 있어요"
-Output: {{"low_level_keywords": ["배터리", "실리콘 전극"], "high_level_keywords": ["실리콘 전극 접착 기술 개선", "배터리 성능 향상"]}}
-(Note: "기술 개발", "연구"는 BLACKLIST이므로 제외됨)
+Output: {{"low_level_keywords": ["스마트팜", "IoT 센서", "작물 생육 모니터링"], "low_level_keywords_en": ["smart farm", "IoT sensor", "crop growth monitoring"], "high_level_keywords": ["IoT 기반 생육 모니터링", "정밀 농업"], "high_level_keywords_en": ["IoT-based growth monitoring", "precision agriculture"]}}
 
 ######################
 Query: {query}
