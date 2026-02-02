@@ -95,12 +95,13 @@ class ProfessorAggregator:
             if not prof_info:
                 continue
             
-            # 교수 ID 생성
-            prof_id = prof_info.get("SQ") or prof_info.get("EMP_NO", "")
-            if not prof_id:
+            # 교수 ID 생성 (SQ 우선, 없으면 EMP_NO)
+            raw_id = prof_info.get("SQ") or prof_info.get("EMP_NO", "")
+            if not raw_id:
                 continue
             
-            prof_id = str(prof_id)
+            # 동일 인물이 SQ=445, SQ=445.0, EMP_NO="26012" 등으로 나뉘지 않도록 정규화
+            prof_id = self._normalize_professor_id(raw_id)
             
             # 교수 정보 저장 (첫 번째 문서의 정보 사용)
             if professor_data[prof_id]["professor_info"] is None:
@@ -109,7 +110,86 @@ class ProfessorAggregator:
             # 문서 추가
             professor_data[prof_id]["documents"][doc_type].append(original_doc)
         
+        # SQ/EMP_NO가 서로 다른 문서에서 혼용되어 같은 사람이 둘로 나뉜 경우 병합
+        professor_data = self._merge_same_professor(professor_data)
+        
         return dict(professor_data)
+    
+    def _normalize_professor_id(self, raw_id: Any) -> str:
+        """
+        교수 ID 정규화. 동일 인물이 "445", "445.0", 445 등으로 나뉘지 않도록 함.
+        """
+        if raw_id is None:
+            return ""
+        s = str(raw_id).strip()
+        if not s:
+            return ""
+        try:
+            # 숫자면 정수 문자열로 통일 (445.0 -> "445")
+            n = float(s)
+            if n == int(n):
+                return str(int(n))
+            return s
+        except (ValueError, TypeError):
+            return s
+    
+    def _merge_same_professor(
+        self,
+        professor_data: Dict[str, Dict[str, Any]]
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        동일 교수가 SQ와 EMP_NO로 서로 다른 키에 들어간 경우 하나로 병합.
+        SQ 또는 EMP_NO가 하나라도 같으면 같은 사람으로 보고 Union-Find로 한 canonical으로 묶음.
+        """
+        if not professor_data:
+            return professor_data
+        
+        # 1) Union-Find: (SQ, EMP_NO)를 공유하는 모든 prof_id를 하나의 canonical로 묶음
+        parent: Dict[str, str] = {}
+
+        def find(x: str) -> str:
+            if x not in parent:
+                parent[x] = x
+            if parent[x] != x:
+                parent[x] = find(parent[x])
+            return parent[x]
+
+        def union(a: str, b: str) -> None:
+            ra, rb = find(a), find(b)
+            if ra != rb:
+                # 사전순/숫자순으로 작은 ID를 canonical로 유지 (결과 일관성)
+                parent[max(ra, rb)] = min(ra, rb)
+
+        for prof_id, data in professor_data.items():
+            info = data.get("professor_info") or {}
+            sq = self._normalize_professor_id(info.get("SQ"))
+            emp = str(info.get("EMP_NO", "")).strip() if info.get("EMP_NO") is not None else ""
+            if not sq and not emp:
+                continue
+            find(prof_id)
+            if sq:
+                find(sq)
+                union(prof_id, sq)
+            if emp:
+                find(emp)
+                union(prof_id, emp)
+
+        # 2) 각 prof_id의 canonical = find(prof_id) (같은 SQ/EMP_NO를 공유하면 이미 한 컴포넌트로 묶임)
+        id_to_canonical = {pid: find(pid) for pid in professor_data}
+
+        # 3) canonical별로 문서 병합
+        merged = defaultdict(lambda: {
+            "professor_info": None,
+            "documents": {"patent": [], "article": [], "project": []}
+        })
+        for prof_id, data in professor_data.items():
+            can = id_to_canonical.get(prof_id, prof_id)
+            if merged[can]["professor_info"] is None:
+                merged[can]["professor_info"] = data["professor_info"]
+            for doc_type in ("patent", "article", "project"):
+                merged[can]["documents"][doc_type].extend(data["documents"].get(doc_type, []))
+
+        return dict(merged)
     
     def _extract_professor_info(self, doc: Dict) -> Optional[Dict[str, Any]]:
         """
