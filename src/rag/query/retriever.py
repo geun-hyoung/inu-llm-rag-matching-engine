@@ -68,15 +68,15 @@ class HybridRetriever:
 
         print(f"HybridRetriever initialized for doc_types: {self.doc_types}")
 
-    def _extract_keywords(self, query: str) -> Tuple[List[str], List[str]]:
+    def _extract_keywords(self, query: str) -> Dict[str, List[str]]:
         """
-        LLM으로 쿼리에서 키워드 추출
+        LLM으로 쿼리에서 키워드 추출 (한글 + 영어)
 
         Args:
             query: 사용자 쿼리
 
         Returns:
-            (high_level_keywords, low_level_keywords)
+            Dict with keys: high_level, high_level_en, low_level, low_level_en
         """
         prompt = format_keyword_extraction_prompt(query)
 
@@ -85,7 +85,7 @@ class HybridRetriever:
                 model=self.llm_model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.0,
-                max_tokens=500
+                max_tokens=800
             )
 
             # 비용 추적
@@ -99,27 +99,37 @@ class HybridRetriever:
 
             # JSON 파싱
             result = json.loads(content)
-            high_level = result.get("high_level_keywords", [])
-            low_level = result.get("low_level_keywords", [])
+            keywords = {
+                "high_level": result.get("high_level_keywords", []),
+                "high_level_en": result.get("high_level_keywords_en", []),
+                "low_level": result.get("low_level_keywords", []),
+                "low_level_en": result.get("low_level_keywords_en", [])
+            }
 
-            print(f"Extracted keywords - High: {high_level}, Low: {low_level}")
-            return high_level, low_level
+            print(f"Extracted keywords - High: {keywords['high_level']}, Low: {keywords['low_level']}")
+            print(f"Extracted keywords (EN) - High: {keywords['high_level_en']}, Low: {keywords['low_level_en']}")
+            return keywords
 
         except Exception as e:
             print(f"Keyword extraction error: {e}")
-            # 실패 시 쿼리 자체를 키워드로 사용
-            return [query], [query]
+            # 실패 시 쿼리 자체를 키워드로 사용 (영어는 빈 리스트)
+            return {
+                "high_level": [query],
+                "high_level_en": [],
+                "low_level": [query],
+                "low_level_en": []
+            }
 
-    def _local_search(
+    def _search_entities_by_keywords(
         self,
         keywords: List[str],
         top_k: int = 5
     ) -> List[Dict]:
         """
-        Local Search: 엔티티 검색 → 연결된 관계 확장
+        키워드로 엔티티 검색 (내부 헬퍼 함수)
 
         Args:
-            keywords: low_level 키워드 리스트
+            keywords: 키워드 리스트
             top_k: 반환할 결과 수
 
         Returns:
@@ -128,22 +138,54 @@ class HybridRetriever:
         if not keywords:
             return []
 
-        # 키워드 임베딩
         keyword_text = " ".join(keywords)
         query_embedding = self.embedder.encode(keyword_text)
 
-        # 엔티티 벡터 검색
         entity_results = self.vector_store.search_entities(
             query_embedding=query_embedding,
             doc_types=self.doc_types,
             top_k=top_k
         )
 
+        return entity_results
+
+    def _local_search(
+        self,
+        keywords_ko: List[str],
+        keywords_en: List[str] = None,
+        top_k: int = 5
+    ) -> List[Dict]:
+        """
+        Local Search: 엔티티 검색 → 연결된 관계 확장
+        Article의 경우 한글/영어 각각 검색 후 병합
+
+        Args:
+            keywords_ko: 한글 low_level 키워드 리스트
+            keywords_en: 영어 low_level 키워드 리스트 (Article용)
+            top_k: 각 언어별 반환할 결과 수
+
+        Returns:
+            검색 결과 리스트
+        """
+        if not keywords_ko:
+            return []
+
+        # 한글 검색 (모든 doc_type)
+        ko_results = self._search_entities_by_keywords(keywords_ko, top_k)
+
+        # 영어 검색 (article만, 영어 키워드가 있을 때만)
+        en_results = []
+        if keywords_en and "article" in self.doc_types:
+            en_results = self._search_entities_by_keywords(keywords_en, top_k)
+
+        # 결과 병합 (중복 제거)
+        all_results = self._merge_search_results(ko_results, en_results)
+
         # 결과에 search_type 추가 및 그래프 확장
         results = []
         seen_entities = set()
 
-        for entity in entity_results:
+        for entity in all_results:
             entity_name = entity["metadata"].get("name", "")
             if entity_name in seen_entities:
                 continue
@@ -162,16 +204,49 @@ class HybridRetriever:
 
         return results
 
-    def _global_search(
+    def _merge_search_results(
+        self,
+        results_a: List[Dict],
+        results_b: List[Dict]
+    ) -> List[Dict]:
+        """
+        두 검색 결과 병합 (doc_id 기준 중복 제거, 높은 similarity 유지)
+
+        Args:
+            results_a: 첫 번째 검색 결과
+            results_b: 두 번째 검색 결과
+
+        Returns:
+            병합된 결과 리스트 (similarity 내림차순)
+        """
+        doc_map = {}
+
+        for r in results_a + results_b:
+            doc_id = r.get('metadata', {}).get('source_doc_id')
+            if doc_id is None:
+                continue
+
+            if doc_id not in doc_map:
+                doc_map[doc_id] = r
+            elif r.get('similarity', 0) > doc_map[doc_id].get('similarity', 0):
+                doc_map[doc_id] = r
+
+        # similarity 내림차순 정렬
+        merged = list(doc_map.values())
+        merged.sort(key=lambda x: x.get('similarity', 0), reverse=True)
+
+        return merged
+
+    def _search_relations_by_keywords(
         self,
         keywords: List[str],
         top_k: int = 5
     ) -> List[Dict]:
         """
-        Global Search: 관계 검색 → 연결된 엔티티 확장
+        키워드로 관계 검색 (내부 헬퍼 함수)
 
         Args:
-            keywords: high_level 키워드 리스트
+            keywords: 키워드 리스트
             top_k: 반환할 결과 수
 
         Returns:
@@ -180,20 +255,52 @@ class HybridRetriever:
         if not keywords:
             return []
 
-        # 키워드 임베딩
         keyword_text = " ".join(keywords)
         query_embedding = self.embedder.encode(keyword_text)
 
-        # 관계 벡터 검색
         relation_results = self.vector_store.search_relations(
             query_embedding=query_embedding,
             doc_types=self.doc_types,
             top_k=top_k
         )
 
+        return relation_results
+
+    def _global_search(
+        self,
+        keywords_ko: List[str],
+        keywords_en: List[str] = None,
+        top_k: int = 5
+    ) -> List[Dict]:
+        """
+        Global Search: 관계 검색 → 연결된 엔티티 확장
+        Article의 경우 한글/영어 각각 검색 후 병합
+
+        Args:
+            keywords_ko: 한글 high_level 키워드 리스트
+            keywords_en: 영어 high_level 키워드 리스트 (Article용)
+            top_k: 각 언어별 반환할 결과 수
+
+        Returns:
+            검색 결과 리스트
+        """
+        if not keywords_ko:
+            return []
+
+        # 한글 검색 (모든 doc_type)
+        ko_results = self._search_relations_by_keywords(keywords_ko, top_k)
+
+        # 영어 검색 (article만, 영어 키워드가 있을 때만)
+        en_results = []
+        if keywords_en and "article" in self.doc_types:
+            en_results = self._search_relations_by_keywords(keywords_en, top_k)
+
+        # 결과 병합 (중복 제거)
+        all_results = self._merge_search_results(ko_results, en_results)
+
         # 관계에서 연결된 엔티티 정보 추가
         results = []
-        for relation in relation_results:
+        for relation in all_results:
             source_entity = relation["metadata"].get("source_entity", "")
             target_entity = relation["metadata"].get("target_entity", "")
 
@@ -331,7 +438,7 @@ class HybridRetriever:
         retrieval_top_k: int = None,
         similarity_threshold: float = None,
         mode: str = "hybrid",
-        keywords: Tuple[List[str], List[str]] = None
+        keywords: Dict[str, List[str]] = None
     ) -> Dict:
         """
         쿼리에 대한 관련 문서/엔티티 검색
@@ -341,7 +448,8 @@ class HybridRetriever:
             retrieval_top_k: Local/Global 검색 시 각각 가져올 개수 (기본: RETRIEVAL_TOP_K)
             similarity_threshold: similarity 임계값 (기본: SIMILARITY_THRESHOLD)
             mode: 검색 모드 ("hybrid", "local", "global")
-            keywords: 미리 추출된 키워드 튜플 (high_level, low_level). None이면 내부에서 추출
+            keywords: 미리 추출된 키워드 딕셔너리. None이면 내부에서 추출
+                     형식: {"high_level": [], "high_level_en": [], "low_level": [], "low_level_en": []}
 
         Returns:
             검색 결과 딕셔너리
@@ -351,19 +459,28 @@ class HybridRetriever:
 
         # 1. 키워드 추출 (외부에서 전달되면 재사용)
         if keywords:
-            high_level_keywords, low_level_keywords = keywords
+            kw = keywords
         else:
-            high_level_keywords, low_level_keywords = self._extract_keywords(query)
+            kw = self._extract_keywords(query)
 
         # 2. 검색 수행 (retrieval_top_k 사용)
+        # Article의 경우 한글+영어 각각 검색, 그 외는 한글만
         local_results = []
         global_results = []
 
         if mode in ("hybrid", "local"):
-            local_results = self._local_search(low_level_keywords, top_k=retrieval_top_k)
+            local_results = self._local_search(
+                keywords_ko=kw["low_level"],
+                keywords_en=kw.get("low_level_en", []),
+                top_k=retrieval_top_k
+            )
 
         if mode in ("hybrid", "global"):
-            global_results = self._global_search(high_level_keywords, top_k=retrieval_top_k)
+            global_results = self._global_search(
+                keywords_ko=kw["high_level"],
+                keywords_en=kw.get("high_level_en", []),
+                top_k=retrieval_top_k
+            )
 
         # 3. 결과 병합 (similarity_threshold 기반 필터링)
         if mode == "hybrid":
@@ -378,8 +495,10 @@ class HybridRetriever:
 
         return {
             "query": query,
-            "high_level_keywords": high_level_keywords,
-            "low_level_keywords": low_level_keywords,
+            "high_level_keywords": kw["high_level"],
+            "high_level_keywords_en": kw.get("high_level_en", []),
+            "low_level_keywords": kw["low_level"],
+            "low_level_keywords_en": kw.get("low_level_en", []),
             "local_results": local_results,
             "global_results": global_results,
             "merged_results": merged_results,
