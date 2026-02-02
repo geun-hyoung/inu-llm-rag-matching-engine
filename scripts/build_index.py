@@ -81,7 +81,8 @@ class IndexBuilder:
         doc_type: str = "patent",
         force_api: bool = True,
         store_dir: str = None,
-        concurrency: int = 1
+        concurrency: int = 1,
+        checkpoint_interval: int = 20
     ):
         """
         Args:
@@ -89,6 +90,7 @@ class IndexBuilder:
             force_api: OpenAI API 강제 사용 여부
             store_dir: RAG 저장소 경로 (None이면 기본값 사용)
             concurrency: 동시 API 요청 수 (1=동기, 2+=비동기)
+            checkpoint_interval: 체크포인트 저장 간격 (N개 문서마다)
         """
         self.doc_type = doc_type
         self.store_dir = store_dir
@@ -104,7 +106,10 @@ class IndexBuilder:
         # concurrency에 따라 동기/비동기 추출기 선택
         if concurrency > 1:
             logger.info(f"Using AsyncEntityRelationExtractor with concurrency={concurrency}")
-            self.extractor = AsyncEntityRelationExtractor(concurrency=concurrency)
+            self.extractor = AsyncEntityRelationExtractor(
+                concurrency=concurrency,
+                checkpoint_interval=checkpoint_interval
+            )
             self.use_async = True
         else:
             logger.info("Using synchronous EntityRelationExtractor")
@@ -806,7 +811,13 @@ def main():
         "--concurrency",
         type=int,
         default=1,
-        help="Number of concurrent API requests (1=sync, 2+=async). Recommended: 5 for Tier 1"
+        help="Number of concurrent API requests (1=sync, 2+=async). Recommended: 10 for Tier 1"
+    )
+    parser.add_argument(
+        "--checkpoint-interval",
+        type=int,
+        default=20,
+        help="Save checkpoint every N documents (default: 20)"
     )
 
     args = parser.parse_args()
@@ -820,7 +831,8 @@ def main():
         doc_type=args.doc_type,
         force_api=args.force_api,
         store_dir=args.store_dir,
-        concurrency=args.concurrency
+        concurrency=args.concurrency,
+        checkpoint_interval=args.checkpoint_interval
     )
 
     if args.retry_failed:

@@ -9,11 +9,13 @@ LightRAG 원본 프롬프트를 사용하여 GPT로 직접 추출
 
 import sys
 import re
+import json
 import logging
 import asyncio
 from pathlib import Path
+from datetime import datetime
 from typing import List, Dict, Tuple, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 
 from openai import OpenAI, AsyncOpenAI
 
@@ -22,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 from config.settings import OPENAI_API_KEY, LLM_MODEL
-from src.utils.cost_tracker import get_cost_tracker, log_chat_usage
+from src.utils.cost_tracker import log_chat_usage
 from src.rag.prompts import (
     TUPLE_DELIMITER,
     RECORD_DELIMITER,
@@ -255,21 +257,34 @@ class AsyncEntityRelationExtractor:
 
     OpenAI API를 병렬로 호출하여 처리 속도를 높임.
     Semaphore를 사용하여 동시 요청 수를 제한 (rate limit 준수).
+    체크포인트 기능으로 중단 시 재개 가능.
     """
 
-    def __init__(self, concurrency: int = 5, max_retries: int = 3):
+    def __init__(
+        self,
+        concurrency: int = 5,
+        max_retries: int = 3,
+        checkpoint_dir: str = "data/checkpoints",
+        checkpoint_interval: int = 20
+    ):
         """
         추출기 초기화
 
         Args:
             concurrency: 동시 요청 수 (기본값: 5, Tier 1 TPM 기준 안전한 값)
             max_retries: API 호출 실패 시 재시도 횟수
+            checkpoint_dir: 체크포인트 저장 디렉토리
+            checkpoint_interval: 체크포인트 저장 간격 (N개 문서마다)
         """
         self.client = AsyncOpenAI(api_key=OPENAI_API_KEY)
         self.model = LLM_MODEL
         self.concurrency = concurrency
         self.max_retries = max_retries
         self.semaphore: Optional[asyncio.Semaphore] = None
+
+        # 체크포인트 설정
+        self.checkpoint_dir = Path(checkpoint_dir)
+        self.checkpoint_interval = checkpoint_interval
 
         # 통계 추적
         self.stats = {
@@ -282,6 +297,66 @@ class AsyncEntityRelationExtractor:
         print(f"  Model: {self.model}")
         print(f"  Concurrency: {concurrency}")
         print(f"  Max retries: {max_retries}")
+        print(f"  Checkpoint interval: {checkpoint_interval} docs")
+
+    def _get_checkpoint_path(self, doc_type: str) -> Path:
+        """체크포인트 파일 경로 반환"""
+        return self.checkpoint_dir / f"extraction_{doc_type}_checkpoint.json"
+
+    def _save_checkpoint(
+        self,
+        doc_type: str,
+        processed_doc_ids: List[str],
+        failed_doc_ids: List[str],
+        entities: List[Entity],
+        relations: List[Relation],
+        total_docs: int
+    ):
+        """체크포인트 저장 (단일 파일 덮어쓰기)"""
+        self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        checkpoint_path = self._get_checkpoint_path(doc_type)
+
+        checkpoint_data = {
+            "doc_type": doc_type,
+            "total_docs": total_docs,
+            "processed_count": len(processed_doc_ids),
+            "failed_count": len(failed_doc_ids),
+            "processed_doc_ids": processed_doc_ids,
+            "failed_doc_ids": failed_doc_ids,
+            "entities": [asdict(e) if hasattr(e, '__dataclass_fields__') else e for e in entities],
+            "relations": [asdict(r) if hasattr(r, '__dataclass_fields__') else r for r in relations],
+            "last_saved_at": datetime.now().isoformat(),
+            "stats": self.stats.copy()
+        }
+
+        with open(checkpoint_path, 'w', encoding='utf-8') as f:
+            json.dump(checkpoint_data, f, ensure_ascii=False, indent=2)
+
+        logger.info(f"Checkpoint saved: {len(processed_doc_ids)}/{total_docs} docs ({len(processed_doc_ids)/total_docs*100:.1f}%)")
+
+    def load_checkpoint(self, doc_type: str) -> Optional[Dict]:
+        """체크포인트 로드 (있으면 반환, 없으면 None)"""
+        checkpoint_path = self._get_checkpoint_path(doc_type)
+
+        if not checkpoint_path.exists():
+            return None
+
+        with open(checkpoint_path, 'r', encoding='utf-8') as f:
+            checkpoint_data = json.load(f)
+
+        logger.info(f"Checkpoint loaded: {checkpoint_data['processed_count']}/{checkpoint_data['total_docs']} docs")
+        logger.info(f"  Last saved: {checkpoint_data['last_saved_at']}")
+        logger.info(f"  Entities: {len(checkpoint_data['entities'])}")
+        logger.info(f"  Relations: {len(checkpoint_data['relations'])}")
+
+        return checkpoint_data
+
+    def clear_checkpoint(self, doc_type: str):
+        """체크포인트 삭제"""
+        checkpoint_path = self._get_checkpoint_path(doc_type)
+        if checkpoint_path.exists():
+            checkpoint_path.unlink()
+            logger.info(f"Checkpoint cleared: {checkpoint_path}")
 
     def _build_prompt(self, text: str) -> str:
         """프롬프트 생성"""
@@ -450,15 +525,17 @@ class AsyncEntityRelationExtractor:
         self,
         documents: List[Dict],
         doc_type: str = "patent",
-        progress_callback=None
+        progress_callback=None,
+        resume: bool = True
     ) -> Tuple[List[Entity], List[Relation], List[str]]:
         """
-        여러 문서에서 비동기 병렬 추출
+        여러 문서에서 비동기 병렬 추출 (체크포인트 지원)
 
         Args:
             documents: 문서 리스트 (doc_id, text 포함)
             doc_type: 문서 타입
             progress_callback: 진행상황 콜백 함수 (선택)
+            resume: 체크포인트에서 재개할지 여부 (기본: True)
 
         Returns:
             (전체 엔티티 리스트, 전체 관계 리스트, 실패한 doc_id 리스트)
@@ -466,39 +543,92 @@ class AsyncEntityRelationExtractor:
         # Semaphore 초기화 (동시 요청 수 제한)
         self.semaphore = asyncio.Semaphore(self.concurrency)
 
-        # 통계 초기화
-        self.stats = {"success": 0, "failed": 0, "retries": 0}
+        total_docs = len(documents)
 
-        logger.info(f"Starting async batch extraction: {len(documents)} documents, concurrency={self.concurrency}")
+        # 체크포인트에서 재개
+        all_entities: List[Entity] = []
+        all_relations: List[Relation] = []
+        processed_doc_ids: List[str] = []
+        failed_doc_ids: List[str] = []
 
-        # 모든 문서를 병렬로 처리
-        tasks = [
-            self._process_single_doc(doc, doc_type, progress_callback)
-            for doc in documents
-        ]
+        if resume:
+            checkpoint = self.load_checkpoint(doc_type)
+            if checkpoint:
+                processed_doc_ids = checkpoint.get("processed_doc_ids", [])
+                failed_doc_ids = checkpoint.get("failed_doc_ids", [])
+                # Entity/Relation 복원
+                for e_dict in checkpoint.get("entities", []):
+                    all_entities.append(Entity(**e_dict))
+                for r_dict in checkpoint.get("relations", []):
+                    all_relations.append(Relation(**r_dict))
+                self.stats = checkpoint.get("stats", {"success": 0, "failed": 0, "retries": 0})
+                logger.info(f"Resuming from checkpoint: {len(processed_doc_ids)} already processed")
+            else:
+                self.stats = {"success": 0, "failed": 0, "retries": 0}
+        else:
+            self.stats = {"success": 0, "failed": 0, "retries": 0}
 
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        # 이미 처리된 문서 제외
+        processed_set = set(processed_doc_ids)
+        remaining_docs = [d for d in documents if d.get("doc_id", "") not in processed_set]
 
-        # 결과 집계
-        all_entities = []
-        all_relations = []
-        failed_doc_ids = []
+        logger.info(f"Starting async batch extraction:")
+        logger.info(f"  Total: {total_docs} docs")
+        logger.info(f"  Already processed: {len(processed_doc_ids)}")
+        logger.info(f"  Remaining: {len(remaining_docs)}")
+        logger.info(f"  Concurrency: {self.concurrency}")
+        logger.info(f"  Checkpoint interval: {self.checkpoint_interval}")
 
-        for result in results:
-            if isinstance(result, Exception):
-                logger.error(f"Task exception: {result}")
-                continue
+        if not remaining_docs:
+            logger.info("All documents already processed!")
+            return all_entities, all_relations, failed_doc_ids
 
+        # 처리 카운터 (체크포인트용)
+        processed_count = [0]
+
+        async def process_with_checkpoint(doc: Dict) -> Tuple[str, List[Entity], List[Relation], bool]:
+            """단일 문서 처리 후 체크포인트 저장"""
+            result = await self._process_single_doc(doc, doc_type, progress_callback)
             doc_id, entities, relations, success = result
 
+            # 결과 저장 (동시성 고려하여 락 사용)
             if success:
                 all_entities.extend(entities)
                 all_relations.extend(relations)
+                processed_doc_ids.append(doc_id)
             else:
                 failed_doc_ids.append(doc_id)
 
+            # 카운터 증가 및 체크포인트 저장
+            processed_count[0] += 1
+            if processed_count[0] % self.checkpoint_interval == 0:
+                self._save_checkpoint(
+                    doc_type=doc_type,
+                    processed_doc_ids=processed_doc_ids,
+                    failed_doc_ids=failed_doc_ids,
+                    entities=all_entities,
+                    relations=all_relations,
+                    total_docs=total_docs
+                )
+
+            return result
+
+        # 모든 문서를 병렬로 처리
+        tasks = [process_with_checkpoint(doc) for doc in remaining_docs]
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+        # 최종 체크포인트 저장
+        self._save_checkpoint(
+            doc_type=doc_type,
+            processed_doc_ids=processed_doc_ids,
+            failed_doc_ids=failed_doc_ids,
+            entities=all_entities,
+            relations=all_relations,
+            total_docs=total_docs
+        )
+
         logger.info(f"Async batch complete:")
-        logger.info(f"  Total: {len(documents)} docs")
+        logger.info(f"  Total: {total_docs} docs")
         logger.info(f"  Success: {self.stats['success']}")
         logger.info(f"  Failed: {len(failed_doc_ids)}")
         logger.info(f"  Retries: {self.stats['retries']}")
