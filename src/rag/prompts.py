@@ -78,6 +78,21 @@ ENTITY_EXTRACTION_PROMPT = """
 | solution | ① 알고리즘 고유명사 (Transformer, CNN)<br>② 구체적 기법명 (Few-shot Learning) | "KoBERT 파인튜닝", "표면 코팅 기술" |
 | achievement | ① 정량적 수치 포함 ("95% 정확도")<br>② 구체적 지표명 + 방향 | "사이클 수명 200% 향상", "처리 속도 10배 향상" |
 
+-Domain Context (도메인 맥락 필수)-
+엔티티 이름과 관계 키워드에는 반드시 **도메인 컨텍스트**를 포함해야 합니다:
+
+| 구분 | 잘못된 예 (✗) | 올바른 예 (✓) | 이유 |
+|------|-------------|--------------|------|
+| 엔티티 이름 | "탐지도 4.5 X 10^12 JONES" | "포토디텍터의 탐지도 4.5 X 10^12 JONES" | "탐지"가 다른 도메인(이상치 탐지)과 혼동 |
+| 엔티티 이름 | "효율 개선" | "전기차 BMS 기반 배터리 효율 개선" | 무엇의 효율인지 명확화 |
+| 엔티티 이름 | "도핑 기법" | "배터리 양극재의 도핑 기법" | 반도체 도핑과 구분 |
+| 관계 키워드 | "결함 탐지, 정확도 향상" | "콘크리트 균열 탐지, NDT 정확도 향상" | 도메인별 구분 필요 |
+
+핵심 원칙:
+- **solution**: "[도메인]용 [기법]" 또는 "[도메인]의 [기법]" 형태 (예: "배터리 양극재용 표면 코팅 기술")
+- **achievement**: "[도메인]의 [지표] [수치/방향]" 형태 (예: "배터리 양극재의 사이클 수명 200% 향상")
+- **relation keywords**: "[도메인] + [행위/결과]" 형태 (예: "자율주행 LiDAR 실시간 처리", "콘크리트 비파괴 검사")
+
 -Steps-
 1. 엔티티 추출
    Format: ("entity"{tuple_delimiter}<entity_name>{tuple_delimiter}<entity_type>{tuple_delimiter}<entity_description>)
@@ -102,12 +117,12 @@ Text:
 Output:
 ("entity"{tuple_delimiter}"리튬이온 배터리 양극재"{tuple_delimiter}"target"{tuple_delimiter}"배터리의 핵심 소재로, 연구가 해결하고자 하는 대상이므로 target"){record_delimiter}
 ("entity"{tuple_delimiter}"고온 구조적 불안정성"{tuple_delimiter}"problem"{tuple_delimiter}"양극재의 기존 한계를 나타내는 부정적 현상이므로 problem"){record_delimiter}
-("entity"{tuple_delimiter}"표면 코팅 기술"{tuple_delimiter}"solution"{tuple_delimiter}"구조적 불안정성 문제를 해결하기 위한 구체적 기법이므로 solution"){record_delimiter}
-("entity"{tuple_delimiter}"도핑 기법"{tuple_delimiter}"solution"{tuple_delimiter}"양극재 특성 개선을 위한 구체적 방법이므로 solution"){record_delimiter}
-("entity"{tuple_delimiter}"사이클 수명 200% 향상"{tuple_delimiter}"achievement"{tuple_delimiter}"제안된 방법으로 달성한 정량적 성과이므로 achievement"){record_delimiter}
+("entity"{tuple_delimiter}"배터리 양극재용 표면 코팅 기술"{tuple_delimiter}"solution"{tuple_delimiter}"구조적 불안정성 문제를 해결하기 위한 구체적 기법이며, 도메인(배터리 양극재)을 명시하여 검색 변별력 확보"){record_delimiter}
+("entity"{tuple_delimiter}"배터리 양극재의 도핑 기법"{tuple_delimiter}"solution"{tuple_delimiter}"양극재 특성 개선을 위한 구체적 방법이며, 도메인(배터리 양극재)을 명시하여 검색 변별력 확보"){record_delimiter}
+("entity"{tuple_delimiter}"배터리 양극재의 사이클 수명 200% 향상"{tuple_delimiter}"achievement"{tuple_delimiter}"제안된 방법으로 달성한 정량적 성과이며, 도메인(배터리 양극재)을 명시하여 검색 변별력 확보"){record_delimiter}
 ("relationship"{tuple_delimiter}"리튬이온 배터리 양극재"{tuple_delimiter}"고온 구조적 불안정성"{tuple_delimiter}"양극재가 고온에서 구조적 불안정성 문제를 가짐"{tuple_delimiter}"양극재 소재 한계, 고온 열화 현상"){record_delimiter}
-("relationship"{tuple_delimiter}"표면 코팅 기술"{tuple_delimiter}"고온 구조적 불안정성"{tuple_delimiter}"표면 코팅으로 구조적 불안정성 문제를 해결함"{tuple_delimiter}"표면 코팅 기반 안정화, 양극재 열화 방지"){record_delimiter}
-("relationship"{tuple_delimiter}"도핑 기법"{tuple_delimiter}"사이클 수명 200% 향상"{tuple_delimiter}"도핑 기법 적용으로 수명이 향상됨"{tuple_delimiter}"도핑 기반 특성 개선, 사이클 수명 연장"){record_delimiter}
+("relationship"{tuple_delimiter}"배터리 양극재용 표면 코팅 기술"{tuple_delimiter}"고온 구조적 불안정성"{tuple_delimiter}"표면 코팅으로 구조적 불안정성 문제를 해결함"{tuple_delimiter}"양극재 표면 코팅 안정화, 배터리 열화 방지"){record_delimiter}
+("relationship"{tuple_delimiter}"배터리 양극재의 도핑 기법"{tuple_delimiter}"배터리 양극재의 사이클 수명 200% 향상"{tuple_delimiter}"도핑 기법 적용으로 수명이 향상됨"{tuple_delimiter}"양극재 도핑 기반 특성 개선, 배터리 사이클 수명 연장"){record_delimiter}
 {completion_delimiter}
 
 ######################
@@ -118,11 +133,11 @@ Text:
 ################
 Output:
 ("entity"{tuple_delimiter}"전기자동차용 배터리 관리 시스템"{tuple_delimiter}"target"{tuple_delimiter}"발명이 해결하고자 하는 핵심 대상 시스템이므로 target"){record_delimiter}
-("entity"{tuple_delimiter}"SOC 추정 알고리즘"{tuple_delimiter}"solution"{tuple_delimiter}"배터리 효율화를 위한 구체적 알고리즘이므로 solution"){record_delimiter}
-("entity"{tuple_delimiter}"셀 밸런싱 기법"{tuple_delimiter}"solution"{tuple_delimiter}"배터리 셀 균형을 맞추는 구체적 기법이므로 solution"){record_delimiter}
-("entity"{tuple_delimiter}"배터리 효율 개선"{tuple_delimiter}"achievement"{tuple_delimiter}"시스템을 통해 달성하고자 하는 성과이므로 achievement"){record_delimiter}
-("relationship"{tuple_delimiter}"SOC 추정 알고리즘"{tuple_delimiter}"전기자동차용 배터리 관리 시스템"{tuple_delimiter}"SOC 추정 알고리즘이 배터리 관리 시스템에 적용됨"{tuple_delimiter}"배터리 충전량 추정, BMS 핵심 로직"){record_delimiter}
-("relationship"{tuple_delimiter}"셀 밸런싱 기법"{tuple_delimiter}"배터리 효율 개선"{tuple_delimiter}"셀 밸런싱으로 배터리 효율을 개선함"{tuple_delimiter}"셀 간 전압 균등화, 배터리 수명 연장"){record_delimiter}
+("entity"{tuple_delimiter}"전기차 BMS용 SOC 추정 알고리즘"{tuple_delimiter}"solution"{tuple_delimiter}"배터리 효율화를 위한 구체적 알고리즘이며, 도메인(전기차 BMS)을 명시하여 검색 변별력 확보"){record_delimiter}
+("entity"{tuple_delimiter}"전기차 BMS의 셀 밸런싱 기법"{tuple_delimiter}"solution"{tuple_delimiter}"배터리 셀 균형을 맞추는 구체적 기법이며, 도메인(전기차 BMS)을 명시하여 검색 변별력 확보"){record_delimiter}
+("entity"{tuple_delimiter}"전기차 BMS 기반 배터리 효율 개선"{tuple_delimiter}"achievement"{tuple_delimiter}"시스템을 통해 달성하고자 하는 성과이며, 도메인(전기차 BMS)을 명시하여 검색 변별력 확보"){record_delimiter}
+("relationship"{tuple_delimiter}"전기차 BMS용 SOC 추정 알고리즘"{tuple_delimiter}"전기자동차용 배터리 관리 시스템"{tuple_delimiter}"SOC 추정 알고리즘이 배터리 관리 시스템에 적용됨"{tuple_delimiter}"전기차 배터리 충전량 추정, BMS 핵심 로직"){record_delimiter}
+("relationship"{tuple_delimiter}"전기차 BMS의 셀 밸런싱 기법"{tuple_delimiter}"전기차 BMS 기반 배터리 효율 개선"{tuple_delimiter}"셀 밸런싱으로 배터리 효율을 개선함"{tuple_delimiter}"전기차 BMS 셀 균형화, EV 배터리 수명 연장"){record_delimiter}
 {completion_delimiter}
 
 ######################
@@ -134,10 +149,10 @@ BERT 기반 한국어 감성분석 모델을 개발하였다. 기존 모델은 �
 Output:
 ("entity"{tuple_delimiter}"한국어 감성분석 모델"{tuple_delimiter}"target"{tuple_delimiter}"연구가 개발하고자 하는 핵심 대상이므로 target"){record_delimiter}
 ("entity"{tuple_delimiter}"한국어 특성 반영 부족"{tuple_delimiter}"problem"{tuple_delimiter}"기존 모델의 한계를 나타내는 부정적 현상이므로 problem"){record_delimiter}
-("entity"{tuple_delimiter}"KoBERT 파인튜닝"{tuple_delimiter}"solution"{tuple_delimiter}"한국어 특성 문제를 해결하기 위한 구체적 기법이므로 solution"){record_delimiter}
-("entity"{tuple_delimiter}"형태소 분석 전처리"{tuple_delimiter}"solution"{tuple_delimiter}"한국어 처리를 위한 구체적 전처리 방법이므로 solution"){record_delimiter}
+("entity"{tuple_delimiter}"한국어 감성분석용 KoBERT 파인튜닝"{tuple_delimiter}"solution"{tuple_delimiter}"한국어 특성 문제를 해결하기 위한 구체적 기법이며, 도메인(한국어 감성분석)을 명시하여 검색 변별력 확보"){record_delimiter}
+("entity"{tuple_delimiter}"한국어 감성분석의 형태소 분석 전처리"{tuple_delimiter}"solution"{tuple_delimiter}"한국어 처리를 위한 구체적 전처리 방법이며, 도메인(한국어 감성분석)을 명시하여 검색 변별력 확보"){record_delimiter}
 ("relationship"{tuple_delimiter}"한국어 감성분석 모델"{tuple_delimiter}"한국어 특성 반영 부족"{tuple_delimiter}"기존 감성분석 모델이 한국어 특성 반영에 한계가 있음"{tuple_delimiter}"BERT 감성분석 한계, 한국어 형태소 처리"){record_delimiter}
-("relationship"{tuple_delimiter}"KoBERT 파인튜닝"{tuple_delimiter}"한국어 특성 반영 부족"{tuple_delimiter}"KoBERT 파인튜닝으로 한국어 특성 반영 문제를 해결함"{tuple_delimiter}"KoBERT 기반 파인튜닝, 한국어 특화 모델 개선"){record_delimiter}
+("relationship"{tuple_delimiter}"한국어 감성분석용 KoBERT 파인튜닝"{tuple_delimiter}"한국어 특성 반영 부족"{tuple_delimiter}"KoBERT 파인튜닝으로 한국어 특성 반영 문제를 해결함"{tuple_delimiter}"한국어 감성분석 파인튜닝, 한국어 특화 NLP 모델 개선"){record_delimiter}
 {completion_delimiter}
 
 ######################
@@ -149,10 +164,10 @@ Text:
 Output:
 ("entity"{tuple_delimiter}"의료영상 자동 분할"{tuple_delimiter}"target"{tuple_delimiter}"연구가 개발하고자 하는 핵심 대상이므로 target"){record_delimiter}
 ("entity"{tuple_delimiter}"CT 영상"{tuple_delimiter}"target"{tuple_delimiter}"분할의 대상이 되는 데이터이므로 target"){record_delimiter}
-("entity"{tuple_delimiter}"U-Net 아키텍처"{tuple_delimiter}"solution"{tuple_delimiter}"영상 분할을 위한 구체적 딥러닝 구조이므로 solution"){record_delimiter}
-("entity"{tuple_delimiter}"어텐션 메커니즘"{tuple_delimiter}"solution"{tuple_delimiter}"성능 향상을 위한 구체적 딥러닝 기법이므로 solution"){record_delimiter}
-("relationship"{tuple_delimiter}"U-Net 아키텍처"{tuple_delimiter}"의료영상 자동 분할"{tuple_delimiter}"U-Net이 의료영상 분할의 기반 구조로 사용됨"{tuple_delimiter}"U-Net 기반 의료영상 분할, CT 장기 인식"){record_delimiter}
-("relationship"{tuple_delimiter}"어텐션 메커니즘"{tuple_delimiter}"U-Net 아키텍처"{tuple_delimiter}"어텐션 메커니즘이 U-Net과 결합되어 사용됨"{tuple_delimiter}"어텐션 U-Net 결합, 의료영상 분할 정확도"){record_delimiter}
+("entity"{tuple_delimiter}"의료영상 분할용 U-Net 아키텍처"{tuple_delimiter}"solution"{tuple_delimiter}"영상 분할을 위한 구체적 딥러닝 구조이며, 도메인(의료영상 분할)을 명시하여 검색 변별력 확보"){record_delimiter}
+("entity"{tuple_delimiter}"CT 영상 분할의 어텐션 메커니즘"{tuple_delimiter}"solution"{tuple_delimiter}"성능 향상을 위한 구체적 딥러닝 기법이며, 도메인(CT 영상 분할)을 명시하여 검색 변별력 확보"){record_delimiter}
+("relationship"{tuple_delimiter}"의료영상 분할용 U-Net 아키텍처"{tuple_delimiter}"의료영상 자동 분할"{tuple_delimiter}"U-Net이 의료영상 분할의 기반 구조로 사용됨"{tuple_delimiter}"U-Net 기반 의료영상 분할, CT 장기 세그멘테이션"){record_delimiter}
+("relationship"{tuple_delimiter}"CT 영상 분할의 어텐션 메커니즘"{tuple_delimiter}"의료영상 분할용 U-Net 아키텍처"{tuple_delimiter}"어텐션 메커니즘이 U-Net과 결합되어 사용됨"{tuple_delimiter}"어텐션 U-Net 의료영상 결합, CT 분할 정확도 향상"){record_delimiter}
 {completion_delimiter}
 
 ######################
@@ -163,15 +178,15 @@ Text:
 ################
 Output:
 ("entity"{tuple_delimiter}"LiDAR 포인트 클라우드 처리 시스템"{tuple_delimiter}"target"{tuple_delimiter}"연구가 해결하고자 하는 핵심 대상 시스템이므로 target"){record_delimiter}
-("entity"{tuple_delimiter}"실시간성 확보 어려움"{tuple_delimiter}"problem"{tuple_delimiter}"기존 처리 방식의 한계를 나타내는 부정적 현상이므로 problem"){record_delimiter}
-("entity"{tuple_delimiter}"PointNet++ 기반 경량화 모델"{tuple_delimiter}"solution"{tuple_delimiter}"실시간성 문제를 해결하기 위한 구체적 딥러닝 모델이므로 solution"){record_delimiter}
-("entity"{tuple_delimiter}"병렬 처리 파이프라인"{tuple_delimiter}"solution"{tuple_delimiter}"속도 향상을 위한 구체적 처리 구조이므로 solution"){record_delimiter}
-("entity"{tuple_delimiter}"처리 속도 10배 향상"{tuple_delimiter}"achievement"{tuple_delimiter}"제안된 방법으로 달성한 정량적 성과이므로 achievement"){record_delimiter}
-("entity"{tuple_delimiter}"메모리 사용량 50% 절감"{tuple_delimiter}"achievement"{tuple_delimiter}"제안된 방법으로 달성한 정량적 성과이므로 achievement"){record_delimiter}
-("relationship"{tuple_delimiter}"LiDAR 포인트 클라우드 처리 시스템"{tuple_delimiter}"실시간성 확보 어려움"{tuple_delimiter}"기존 처리 시스템이 실시간 처리에 한계가 있음"{tuple_delimiter}"LiDAR 데이터 처리 한계, 실시간성 병목"){record_delimiter}
-("relationship"{tuple_delimiter}"PointNet++ 기반 경량화 모델"{tuple_delimiter}"실시간성 확보 어려움"{tuple_delimiter}"경량화 모델로 실시간성 문제를 해결함"{tuple_delimiter}"포인트 클라우드 경량화, 실시간 LiDAR 처리"){record_delimiter}
-("relationship"{tuple_delimiter}"병렬 처리 파이프라인"{tuple_delimiter}"처리 속도 10배 향상"{tuple_delimiter}"병렬 처리로 속도가 10배 향상됨"{tuple_delimiter}"병렬 연산 파이프라인, LiDAR 데이터 고속 처리"){record_delimiter}
-("relationship"{tuple_delimiter}"PointNet++ 기반 경량화 모델"{tuple_delimiter}"메모리 사용량 50% 절감"{tuple_delimiter}"경량화 모델로 메모리 사용이 절감됨"{tuple_delimiter}"PointNet++ 모델 경량화, 자율주행 메모리 최적화"){record_delimiter}
+("entity"{tuple_delimiter}"자율주행 LiDAR의 실시간 처리 어려움"{tuple_delimiter}"problem"{tuple_delimiter}"기존 처리 방식의 한계를 나타내는 부정적 현상이며, 도메인(자율주행 LiDAR)을 명시하여 검색 변별력 확보"){record_delimiter}
+("entity"{tuple_delimiter}"자율주행 LiDAR용 PointNet++ 경량화 모델"{tuple_delimiter}"solution"{tuple_delimiter}"실시간성 문제를 해결하기 위한 구체적 딥러닝 모델이며, 도메인(자율주행 LiDAR)을 명시하여 검색 변별력 확보"){record_delimiter}
+("entity"{tuple_delimiter}"자율주행 LiDAR의 병렬 처리 파이프라인"{tuple_delimiter}"solution"{tuple_delimiter}"속도 향상을 위한 구체적 처리 구조이며, 도메인(자율주행 LiDAR)을 명시하여 검색 변별력 확보"){record_delimiter}
+("entity"{tuple_delimiter}"자율주행 LiDAR의 처리 속도 10배 향상"{tuple_delimiter}"achievement"{tuple_delimiter}"제안된 방법으로 달성한 정량적 성과이며, 도메인(자율주행 LiDAR)을 명시하여 검색 변별력 확보"){record_delimiter}
+("entity"{tuple_delimiter}"자율주행 시스템의 메모리 사용량 50% 절감"{tuple_delimiter}"achievement"{tuple_delimiter}"제안된 방법으로 달성한 정량적 성과이며, 도메인(자율주행 시스템)을 명시하여 검색 변별력 확보"){record_delimiter}
+("relationship"{tuple_delimiter}"LiDAR 포인트 클라우드 처리 시스템"{tuple_delimiter}"자율주행 LiDAR의 실시간 처리 어려움"{tuple_delimiter}"기존 처리 시스템이 실시간 처리에 한계가 있음"{tuple_delimiter}"LiDAR 데이터 처리 한계, 자율주행 실시간성 병목"){record_delimiter}
+("relationship"{tuple_delimiter}"자율주행 LiDAR용 PointNet++ 경량화 모델"{tuple_delimiter}"자율주행 LiDAR의 실시간 처리 어려움"{tuple_delimiter}"경량화 모델로 실시간성 문제를 해결함"{tuple_delimiter}"포인트 클라우드 경량화, 자율주행 실시간 LiDAR 처리"){record_delimiter}
+("relationship"{tuple_delimiter}"자율주행 LiDAR의 병렬 처리 파이프라인"{tuple_delimiter}"자율주행 LiDAR의 처리 속도 10배 향상"{tuple_delimiter}"병렬 처리로 속도가 10배 향상됨"{tuple_delimiter}"LiDAR 병렬 연산 파이프라인, 자율주행 포인트 클라우드 고속 처리"){record_delimiter}
+("relationship"{tuple_delimiter}"자율주행 LiDAR용 PointNet++ 경량화 모델"{tuple_delimiter}"자율주행 시스템의 메모리 사용량 50% 절감"{tuple_delimiter}"경량화 모델로 메모리 사용이 절감됨"{tuple_delimiter}"PointNet++ 자율주행 경량화, LiDAR 메모리 최적화"){record_delimiter}
 {completion_delimiter}
 
 ######################

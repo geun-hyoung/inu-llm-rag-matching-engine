@@ -81,7 +81,8 @@ class IndexBuilder:
         doc_type: str = "patent",
         force_api: bool = True,
         store_dir: str = None,
-        concurrency: int = 1
+        concurrency: int = 1,
+        checkpoint_interval: int = 20
     ):
         """
         Args:
@@ -89,6 +90,7 @@ class IndexBuilder:
             force_api: OpenAI API 강제 사용 여부
             store_dir: RAG 저장소 경로 (None이면 기본값 사용)
             concurrency: 동시 API 요청 수 (1=동기, 2+=비동기)
+            checkpoint_interval: 체크포인트 저장 간격 (N개 문서마다)
         """
         self.doc_type = doc_type
         self.store_dir = store_dir
@@ -104,7 +106,10 @@ class IndexBuilder:
         # concurrency에 따라 동기/비동기 추출기 선택
         if concurrency > 1:
             logger.info(f"Using AsyncEntityRelationExtractor with concurrency={concurrency}")
-            self.extractor = AsyncEntityRelationExtractor(concurrency=concurrency)
+            self.extractor = AsyncEntityRelationExtractor(
+                concurrency=concurrency,
+                checkpoint_interval=checkpoint_interval
+            )
             self.use_async = True
         else:
             logger.info("Using synchronous EntityRelationExtractor")
@@ -199,23 +204,63 @@ class IndexBuilder:
     ) -> tuple[List[Dict], List[Dict], List[str]]:
         """비동기 엔티티/관계 추출 (asyncio 기반)"""
         import asyncio
+        import time
 
         logger.info(f"Async extraction: {len(docs)} docs, concurrency={self.concurrency}")
 
-        # 진행상황 카운터
+        # 진행상황 카운터 및 시간 추적
         processed_count = [0]
         total_docs = len(docs)
+        start_time = [time.time()]
+        last_log_time = [time.time()]
 
         def progress_callback(doc_id: str, entity_count: int, relation_count: int):
             processed_count[0] += 1
-            if processed_count[0] % 100 == 0 or processed_count[0] == total_docs:
-                pct = processed_count[0] / total_docs * 100
-                logger.info(f"Progress: {processed_count[0]}/{total_docs} ({pct:.1f}%)")
+            current_time = time.time()
 
-        # 비동기 배치 추출 실행
-        entities, relations, failed_doc_ids = self.extractor.extract_batch(
-            documents=docs,
-            doc_type=self.doc_type
+            # 10초마다 또는 100개마다 또는 완료 시 로그 출력
+            should_log = (
+                current_time - last_log_time[0] >= 10 or
+                processed_count[0] % 100 == 0 or
+                processed_count[0] == total_docs
+            )
+
+            if should_log:
+                last_log_time[0] = current_time
+                elapsed = current_time - start_time[0]
+                pct = processed_count[0] / total_docs * 100
+
+                # ETA 계산
+                if processed_count[0] > 0:
+                    avg_time = elapsed / processed_count[0]
+                    remaining = total_docs - processed_count[0]
+                    eta_seconds = avg_time * remaining
+
+                    # 시간 포맷팅
+                    if eta_seconds >= 3600:
+                        eta_str = f"{eta_seconds/3600:.1f}h"
+                    elif eta_seconds >= 60:
+                        eta_str = f"{eta_seconds/60:.1f}m"
+                    else:
+                        eta_str = f"{eta_seconds:.0f}s"
+
+                    elapsed_str = f"{elapsed/60:.1f}m" if elapsed >= 60 else f"{elapsed:.0f}s"
+                    speed = processed_count[0] / elapsed * 60  # docs/min
+
+                    logger.info(
+                        f"Progress: {processed_count[0]}/{total_docs} ({pct:.1f}%) | "
+                        f"Elapsed: {elapsed_str} | ETA: {eta_str} | Speed: {speed:.1f} docs/min"
+                    )
+                else:
+                    logger.info(f"Progress: {processed_count[0]}/{total_docs} ({pct:.1f}%)")
+
+        # 비동기 배치 추출 실행 (progress_callback 연결)
+        entities, relations, failed_doc_ids = asyncio.run(
+            self.extractor.extract_batch_async(
+                documents=docs,
+                doc_type=self.doc_type,
+                progress_callback=progress_callback
+            )
         )
 
         # dataclass를 dict로 변환
@@ -806,7 +851,13 @@ def main():
         "--concurrency",
         type=int,
         default=1,
-        help="Number of concurrent API requests (1=sync, 2+=async). Recommended: 5 for Tier 1"
+        help="Number of concurrent API requests (1=sync, 2+=async). Recommended: 10 for Tier 1"
+    )
+    parser.add_argument(
+        "--checkpoint-interval",
+        type=int,
+        default=20,
+        help="Save checkpoint every N documents (default: 20)"
     )
 
     args = parser.parse_args()
@@ -820,7 +871,8 @@ def main():
         doc_type=args.doc_type,
         force_api=args.force_api,
         store_dir=args.store_dir,
-        concurrency=args.concurrency
+        concurrency=args.concurrency,
+        checkpoint_interval=args.checkpoint_interval
     )
 
     if args.retry_failed:
