@@ -47,13 +47,15 @@ class ChromaVectorStore:
     동시 접근으로 인한 HNSW 인덱스 충돌 방지
     """
 
-    _instance = None
-    _initialized = False
+    _instances = {}  # persist_dir별로 인스턴스 관리
 
     def __new__(cls, persist_dir: str = None):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
+        # persist_dir별로 별도 인스턴스 생성
+        key = persist_dir or "default"
+        if key not in cls._instances:
+            cls._instances[key] = super().__new__(cls)
+            cls._instances[key]._initialized = False
+        return cls._instances[key]
 
     def __init__(self, persist_dir: str = None):
         """
@@ -63,7 +65,7 @@ class ChromaVectorStore:
             persist_dir: 영구 저장 디렉토리
         """
         # 이미 초기화되었으면 스킵
-        if ChromaVectorStore._initialized:
+        if getattr(self, '_initialized', False):
             return
 
         self.persist_dir = Path(persist_dir or RAG_STORE_DIR) / "chromadb"
@@ -80,7 +82,7 @@ class ChromaVectorStore:
         self._init_collections()
 
         print(f"ChromaDB initialized at: {self.persist_dir}")
-        ChromaVectorStore._initialized = True
+        self._initialized = True
 
     def _init_collections(self):
         """9개 컬렉션 생성/로드"""
