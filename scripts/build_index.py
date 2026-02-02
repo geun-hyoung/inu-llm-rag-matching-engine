@@ -204,23 +204,63 @@ class IndexBuilder:
     ) -> tuple[List[Dict], List[Dict], List[str]]:
         """비동기 엔티티/관계 추출 (asyncio 기반)"""
         import asyncio
+        import time
 
         logger.info(f"Async extraction: {len(docs)} docs, concurrency={self.concurrency}")
 
-        # 진행상황 카운터
+        # 진행상황 카운터 및 시간 추적
         processed_count = [0]
         total_docs = len(docs)
+        start_time = [time.time()]
+        last_log_time = [time.time()]
 
         def progress_callback(doc_id: str, entity_count: int, relation_count: int):
             processed_count[0] += 1
-            if processed_count[0] % 100 == 0 or processed_count[0] == total_docs:
-                pct = processed_count[0] / total_docs * 100
-                logger.info(f"Progress: {processed_count[0]}/{total_docs} ({pct:.1f}%)")
+            current_time = time.time()
 
-        # 비동기 배치 추출 실행
-        entities, relations, failed_doc_ids = self.extractor.extract_batch(
-            documents=docs,
-            doc_type=self.doc_type
+            # 10초마다 또는 100개마다 또는 완료 시 로그 출력
+            should_log = (
+                current_time - last_log_time[0] >= 10 or
+                processed_count[0] % 100 == 0 or
+                processed_count[0] == total_docs
+            )
+
+            if should_log:
+                last_log_time[0] = current_time
+                elapsed = current_time - start_time[0]
+                pct = processed_count[0] / total_docs * 100
+
+                # ETA 계산
+                if processed_count[0] > 0:
+                    avg_time = elapsed / processed_count[0]
+                    remaining = total_docs - processed_count[0]
+                    eta_seconds = avg_time * remaining
+
+                    # 시간 포맷팅
+                    if eta_seconds >= 3600:
+                        eta_str = f"{eta_seconds/3600:.1f}h"
+                    elif eta_seconds >= 60:
+                        eta_str = f"{eta_seconds/60:.1f}m"
+                    else:
+                        eta_str = f"{eta_seconds:.0f}s"
+
+                    elapsed_str = f"{elapsed/60:.1f}m" if elapsed >= 60 else f"{elapsed:.0f}s"
+                    speed = processed_count[0] / elapsed * 60  # docs/min
+
+                    logger.info(
+                        f"Progress: {processed_count[0]}/{total_docs} ({pct:.1f}%) | "
+                        f"Elapsed: {elapsed_str} | ETA: {eta_str} | Speed: {speed:.1f} docs/min"
+                    )
+                else:
+                    logger.info(f"Progress: {processed_count[0]}/{total_docs} ({pct:.1f}%)")
+
+        # 비동기 배치 추출 실행 (progress_callback 연결)
+        entities, relations, failed_doc_ids = asyncio.run(
+            self.extractor.extract_batch_async(
+                documents=docs,
+                doc_type=self.doc_type,
+                progress_callback=progress_callback
+            )
         )
 
         # dataclass를 dict로 변환
