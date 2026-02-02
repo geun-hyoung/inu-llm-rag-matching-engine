@@ -18,14 +18,14 @@ from config.ahp_config import DEFAULT_TYPE_WEIGHTS
 def main():
     """AHP 랭킹 실행"""
     # 입력 파일 경로
-    rag_result_file = Path("results/test/rag/test_rag.json")
+    rag_result_file = Path("results/runs/rag/test_rag.json")
     
     if not rag_result_file.exists():
         print(f"Error: RAG 결과 파일을 찾을 수 없습니다: {rag_result_file}")
         return
     
     # 출력 디렉토리 생성
-    output_dir = Path("results/test/ahp")
+    output_dir = Path("results/runs/ahp")
     output_dir.mkdir(parents=True, exist_ok=True)
     
     # RAG 결과 로드

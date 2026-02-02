@@ -40,3 +40,6 @@ huggingface_hub==0.36.0
 
 # Streamlit
 streamlit>=1.28.0
+
+# Report PDF export (fpdf2만 사용, Windows에서 GTK 불필요)
+fpdf2>=2.7.0

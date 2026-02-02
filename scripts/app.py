@@ -9,6 +9,7 @@ import json
 import sys
 from pathlib import Path
 from typing import Dict, Any, Optional
+from datetime import datetime
 import pandas as pd
 
 sys.path.append(str(Path(__file__).parent.parent))
@@ -53,372 +54,256 @@ def get_retriever(_embedder, _vector_store, doc_types_tuple: tuple):
     )
 
 
-# 페이지 설정
+# 페이지 설정 (사이드바 미사용)
 st.set_page_config(
-    page_title="INU LLM RAG Matching Engine - 리포트 생성",
-    page_icon="📊",
-    layout="wide"
+    page_title="INU 산학 매칭 리포트",
+    page_icon="📋",
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
 
-# 제목
-st.title("📊 산학 매칭 리포트 생성 시스템")
+# ===== 커스텀 CSS: 인디고/RISE 스타일 참고 (서늘한 하늘색·깔끔한 UI) =====
+st.markdown("""
+<style>
+    /* 배경: 서늘한 하늘색·회색 (눈부심 완화) */
+    .stApp { background: linear-gradient(180deg, #e8eef4 0%, #e2e8f0 50%, #dde4ec 100%) !important; }
+    
+    /* 메인 본문 텍스트 */
+    .main .block-container p, .main .block-container li, .main .block-container span,
+    .main [data-testid="stMarkdown"] p, .main [data-testid="stMarkdown"] li {
+        color: #2d3748 !important;
+    }
+    
+    /* 제목 계층 */
+    .main h1 { font-weight: 700 !important; color: #1e3a5f !important; letter-spacing: -0.03em !important; }
+    .main h2 { font-weight: 600 !important; color: #1e3a5f !important; letter-spacing: -0.02em !important; margin-top: 1.25rem !important; }
+    .main h3 { font-weight: 600 !important; color: #2c5282 !important; }
+    .main h4 { font-weight: 600 !important; color: #2d3748 !important; }
+    
+    /* 캡션 */
+    .main [data-testid="stCaptionContainer"] { color: #5a6c7d !important; }
+    
+    /* 사이드바 숨김 */
+    [data-testid="stSidebar"] { display: none !important; }
+    .main .block-container { max-width: 100% !important; padding-left: 2rem !important; padding-right: 2rem !important; }
+    
+    /* 상단 헤더 배너 (카드 느낌) */
+    .main .block-container > div:first-child {
+        background: rgba(255,255,255,0.85) !important;
+        border-radius: 12px !important;
+        padding: 1.25rem 1.5rem !important;
+        margin-bottom: 1rem !important;
+        box-shadow: 0 2px 12px rgba(30, 58, 95, 0.08) !important;
+        border: 1px solid rgba(226, 232, 240, 0.9) !important;
+    }
+    
+    /* 탭: RISE 스타일 깔끔한 메뉴 */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 0.25rem !important;
+        background: rgba(255,255,255,0.6) !important;
+        padding: 0.35rem !important;
+        border-radius: 10px !important;
+        border: 1px solid rgba(203, 213, 224, 0.8) !important;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.04) !important;
+    }
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 8px !important;
+        padding: 0.5rem 1.25rem !important;
+        font-weight: 500 !important;
+        color: #4a5568 !important;
+    }
+    .stTabs [aria-selected="true"] {
+        background: #1e5aa8 !important;
+        color: #fff !important;
+    }
+    
+    /* 버튼: 원래 Streamlit 색상 유지, 반응형·터치 친화만 */
+    .stButton > button {
+        border-radius: 8px !important;
+        padding: 0.5rem 1.25rem !important;
+        min-height: 48px !important;
+        transition: transform 0.15s ease, box-shadow 0.15s ease !important;
+        cursor: pointer !important;
+    }
+    .stButton > button:hover { transform: translateY(-1px) !important; }
+    .stButton > button:active { transform: translateY(0) !important; }
+    @media (max-width: 640px) {
+        .stButton > button { min-height: 44px !important; padding: 0.6rem 1rem !important; width: 100% !important; }
+    }
+    
+    /* 검색 쿼리 입력창: 원래 색상 유지, 반응형·실시간 입력만 */
+    [data-testid="stTextInput"] input {
+        font-size: 1rem !important;
+        padding: 0.65rem 0.9rem !important;
+        min-height: 48px !important;
+        transition: border-color 0.2s, box-shadow 0.2s !important;
+    }
+    @media (max-width: 640px) {
+        [data-testid="stTextInput"] input { min-height: 44px !important; padding: 0.6rem 0.8rem !important; font-size: 16px !important; }
+        .main .block-container { padding-left: 1rem !important; padding-right: 1rem !important; }
+    }
+    
+    /* 표 */
+    .main table { border-collapse: collapse !important; border-radius: 8px !important; overflow: hidden !important; box-shadow: 0 1px 4px rgba(0,0,0,0.06) !important; }
+    .main th { background: #e8eef4 !important; color: #1e3a5f !important; font-weight: 600 !important; padding: 0.6rem 0.75rem !important; }
+    .main td { color: #2d3748 !important; background: rgba(255,255,255,0.7) !important; padding: 0.5rem 0.75rem !important; }
+    
+    /* 메트릭·알림 */
+    [data-testid="stMetricValue"] { font-weight: 600 !important; color: #1e3a5f !important; }
+    [data-testid="stMetricLabel"] { color: #5a6c7d !important; }
+    .stSuccess { background: rgba(16, 185, 129, 0.12) !important; color: #047857 !important; border-radius: 8px !important; padding: 0.5rem 0.75rem !important; }
+    .stWarning { background: rgba(245, 158, 11, 0.12) !important; color: #b45309 !important; border-radius: 8px !important; }
+    .stError { background: rgba(220, 38, 38, 0.1) !important; color: #b91c1c !important; border-radius: 8px !important; }
+    .stInfo { background: rgba(30, 90, 168, 0.1) !important; color: #1e5aa8 !important; border-radius: 8px !important; }
+    
+    /* 구분선 */
+    hr { margin: 1.25rem 0 !important; border: none !important; border-top: 1px solid rgba(203, 213, 224, 0.8) !important; }
+    
+    /* 다운로드 버튼 영역 */
+    .main [data-testid="column"] .stDownloadButton > button { border-radius: 8px !important; }
+</style>
+""", unsafe_allow_html=True)
+
+# 기본값: config API 키, 전체 문서 타입, 기본 Few-shot
+api_key = OPENAI_API_KEY or ""
+doc_types = ["patent", "article", "project"]
+default_few_shot_path = Path("data/report_few_shot_examples.json")
+few_shot_examples = None
+if default_few_shot_path.exists():
+    try:
+        with open(default_few_shot_path, "r", encoding="utf-8") as f:
+            few_shot_data = json.load(f)
+            few_shot_examples = few_shot_data if isinstance(few_shot_data, list) else few_shot_data.get("examples")
+    except Exception:
+        pass
+
+# 헤더
+st.markdown("## 📋 산학 매칭 추천 리포트")
+st.caption("검색 쿼리 기반 RAG·AHP·리포트 자동 생성 | INU LLM RAG Matching Engine")
 st.markdown("---")
 
-# 사이드바 - 공통 설정
-with st.sidebar:
-    st.header("⚙️ 설정")
+st.header("🔍 쿼리로 검색 & 리포트 생성")
+st.markdown("쿼리를 입력하면 **RAG 검색 → AHP 랭킹 → 리포트 생성**이 자동으로 실행됩니다.")
 
-    # API Key 입력
-    api_key = st.text_input(
-        "OpenAI API Key",
-        value=OPENAI_API_KEY if OPENAI_API_KEY else "",
-        type="password",
-        help="config/settings.py에 설정하거나 여기에 직접 입력하세요"
-    )
-
-    st.markdown("---")
-
-    # 문서 타입 선택
-    st.header("📄 검색 문서 타입")
-    doc_types = st.multiselect(
-        "검색할 문서 타입 선택",
-        options=["patent", "article", "project"],
-        default=["patent", "article", "project"],
-        help="RAG 검색에 포함할 문서 타입을 선택하세요"
-    )
-
-    st.markdown("---")
-
-    # Few-shot 예시
-    st.header("📝 Few-shot 예시")
-    few_shot_file = st.file_uploader(
-        "Few-shot 예시 JSON 업로드 (선택)",
-        type=["json"],
-        help="기본: data/report_few_shot_examples.json"
-    )
-
-    # 기본 Few-shot 파일 자동 로드
-    default_few_shot_path = Path("data/report_few_shot_examples.json")
-    few_shot_examples = None
-    if default_few_shot_path.exists() and not few_shot_file:
-        try:
-            with open(default_few_shot_path, 'r', encoding='utf-8') as f:
-                few_shot_data = json.load(f)
-                if isinstance(few_shot_data, list):
-                    few_shot_examples = few_shot_data
-                elif isinstance(few_shot_data, dict) and "examples" in few_shot_data:
-                    few_shot_examples = few_shot_data["examples"]
-            st.info(f"✓ 기본 Few-shot 로드됨 ({len(few_shot_examples)}개)")
-        except Exception as e:
-            st.warning(f"Few-shot 로드 실패: {e}")
-
-
-# 탭 생성
-tab1, tab2 = st.tabs(["🔍 쿼리 검색", "📁 파일 선택"])
-
-
-# ===== 탭 1: 쿼리 입력 → 자동 파이프라인 =====
-with tab1:
-    st.header("🔍 쿼리로 검색 & 리포트 생성")
-    st.markdown("쿼리를 입력하면 **RAG 검색 → AHP 랭킹 → 리포트 생성**이 자동으로 실행됩니다.")
-
-    # 쿼리 입력
+# 폼 사용: 입력 중에는 스크립트 재실행 없음 → 반응성 개선. 제출 시에만 실행.
+with st.form("search_form", clear_on_submit=False):
     query = st.text_input(
         "검색 쿼리",
         placeholder="예: 딥러닝 의료영상 분석 기술 연구를 찾고 있어요",
-        help="산학협력 매칭을 위한 검색 쿼리를 입력하세요"
+        help="산학협력 매칭을 위한 검색 쿼리를 입력하세요",
+        key="query_input",
     )
-
-    if st.button("🚀 검색 & 리포트 생성", type="primary", key="query_search"):
-        if not api_key:
-            st.error("⚠️ OpenAI API Key를 입력해주세요.")
-        elif not query:
-            st.warning("⚠️ 검색 쿼리를 입력해주세요.")
-        elif not doc_types:
-            st.warning("⚠️ 검색할 문서 타입을 선택해주세요.")
-        else:
-            # Few-shot 업로드 파일 처리
-            if few_shot_file:
-                try:
-                    few_shot_data = json.load(few_shot_file)
-                    if isinstance(few_shot_data, list):
-                        few_shot_examples = few_shot_data
-                    elif isinstance(few_shot_data, dict) and "examples" in few_shot_data:
-                        few_shot_examples = few_shot_data["examples"]
-                except Exception as e:
-                    st.warning(f"Few-shot 파일 로드 실패: {e}")
-
-            # 진행 상황 표시
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-
-            try:
-                # 캐시된 리소스 가져오기 (최초 1회만 실제 로드)
-                with st.spinner("임베딩 모델 및 벡터 저장소 로드 중... (최초 실행 시에만 시간이 소요됩니다)"):
-                    embedder = get_embedder()
-                    vector_store = get_vector_store()
-                    retriever = get_retriever(embedder, vector_store, tuple(doc_types))
-
-                progress_bar.progress(10)
-
-                status_text.text("ReportGenerator 초기화 중...")
-                progress_bar.progress(20)
-
-                generator = ReportGenerator(api_key=api_key)
-
-                status_text.text("RAG 검색 수행 중...")
-                progress_bar.progress(30)
-
-                # 전체 파이프라인 실행 (캐시된 retriever 사용)
-                report_data = generator.generate_report_from_query(
-                    query=query,
-                    doc_types=doc_types,
-                    few_shot_examples=few_shot_examples,
-                    retriever=retriever
-                )
-
-                progress_bar.progress(90)
-                status_text.text("리포트 저장 중...")
-
-                # 리포트 저장
-                json_path = generator.save_json(report_data)
-                text_path = generator.save_text(report_data)
-
-                progress_bar.progress(100)
-                status_text.text("완료!")
-
-                # 비용 정보 가져오기
-                cost_result = report_data.get("api_cost")
-
-                st.success(f"✅ 리포트 생성 완료!")
-                if cost_result and cost_result.get('total_cost_usd', 0) > 0:
-                    st.info(f"저장 위치: {json_path.parent} | API 비용: ${cost_result['total_cost_usd']:.6f}")
-                else:
-                    st.info(f"저장 위치: {json_path.parent}")
-
-                # 생성된 리포트 표시
-                st.markdown("---")
-                st.header("📄 생성된 리포트")
-
-                report_text = report_data.get("report_text", "")
-                st.markdown(report_text)
-
-                # 원본 텍스트 보기
-                with st.expander("📋 원본 텍스트 보기"):
-                    st.text_area("리포트 원본", value=report_text, height=400, disabled=True)
-
-                # 입력 데이터 확인
-                with st.expander("🔍 입력 데이터 확인 (디버깅)"):
-                    st.json(report_data.get("input_data", {}))
-
-                # 다운로드 버튼
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.download_button(
-                        label="📥 JSON 다운로드",
-                        data=json.dumps(report_data, ensure_ascii=False, indent=2),
-                        file_name=json_path.name,
-                        mime="application/json"
-                    )
-                with col2:
-                    st.download_button(
-                        label="📥 TXT 다운로드",
-                        data=report_text,
-                        file_name=text_path.name,
-                        mime="text/plain"
-                    )
-
-            except Exception as e:
-                st.error(f"❌ 오류 발생: {str(e)}")
-                st.exception(e)
-            finally:
-                progress_bar.empty()
-                status_text.empty()
-
-
-# ===== 탭 2: 기존 파일 선택 =====
-with tab2:
-    st.header("📁 기존 파일로 리포트 생성")
-    st.markdown("이미 생성된 AHP/RAG 결과 파일을 선택하여 리포트를 생성합니다.")
-
-    # 파일 선택
-    col1, col2 = st.columns(2)
-
-    with col1:
-        ahp_results_dir = Path("results/test/ahp")
-        ahp_files = list(ahp_results_dir.glob("ahp_results_*.json")) if ahp_results_dir.exists() else []
-
-        if ahp_files:
-            ahp_files.sort(reverse=True)
-            selected_ahp_file = st.selectbox(
-                "AHP 결과 파일",
-                options=[f.name for f in ahp_files],
-                index=0,
-                help="results/test/ahp/"
-            )
-        else:
-            st.warning("AHP 결과 파일 없음")
-            selected_ahp_file = None
-
+    col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        rag_results_dir = Path("results/test/rag")
-        rag_files = list(rag_results_dir.glob("*.json")) if rag_results_dir.exists() else []
+        submitted = st.form_submit_button("🚀 검색 & 리포트 생성", type="primary")
 
-        if rag_files:
-            rag_files.sort(reverse=True)
-            selected_rag_file = st.selectbox(
-                "RAG 결과 파일",
-                options=[f.name for f in rag_files],
-                index=0,
-                help="results/test/rag/"
-            )
-        else:
-            st.warning("RAG 결과 파일 없음")
-            selected_rag_file = None
-
+if submitted:
     if not api_key:
-        st.error("⚠️ OpenAI API Key를 입력해주세요.")
-    elif selected_ahp_file and selected_rag_file:
-        # 파일 로드
-        ahp_file_path = ahp_results_dir / selected_ahp_file
-        rag_file_path = rag_results_dir / selected_rag_file
+        st.error("⚠️ OpenAI API Key가 없습니다. config/settings.py에 OPENAI_API_KEY를 설정해주세요.")
+    elif not query:
+        st.warning("⚠️ 검색 쿼리를 입력해주세요.")
+    else:
+        # 진행 상황 표시
+        progress_bar = st.progress(0)
+        status_text = st.empty()
 
         try:
-            with open(ahp_file_path, 'r', encoding='utf-8') as f:
-                ahp_results = json.load(f)
+            # 캐시된 리소스 가져오기 (최초 1회만 실제 로드)
+            with st.spinner("임베딩 모델 및 벡터 저장소 로드 중... (최초 실행 시에만 시간이 소요됩니다)"):
+                embedder = get_embedder()
+                vector_store = get_vector_store()
+                retriever = get_retriever(embedder, vector_store, tuple(doc_types))
 
-            with open(rag_file_path, 'r', encoding='utf-8') as f:
-                rag_results = json.load(f)
+            progress_bar.progress(10)
 
-            # AHP 결과 요약
-            st.subheader("📋 AHP 결과 요약")
+            status_text.text("ReportGenerator 초기화 중...")
+            progress_bar.progress(20)
 
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("검색 쿼리", ahp_results.get("query", "N/A"))
-            with col2:
-                st.metric("총 교수 수", ahp_results.get("total_professors", 0))
-            with col3:
-                type_weights = ahp_results.get("type_weights", {})
-                st.metric("가중치", f"P:{type_weights.get('patent', 0):.1f}, A:{type_weights.get('article', 0):.1f}, Pr:{type_weights.get('project', 0):.1f}")
+            generator = ReportGenerator(api_key=api_key)
 
-            # 상위 교수 목록
-            ranked_professors = ahp_results.get("ranked_professors", [])
-            if ranked_professors:
-                st.subheader("🏆 상위 교수 순위")
+            status_text.text("RAG 검색 수행 중...")
+            progress_bar.progress(30)
 
-                prof_data = []
-                for i, prof in enumerate(ranked_professors[:10], 1):
-                    prof_info = prof.get("professor_info", {})
-                    scores = prof.get("scores_by_type", {})
-                    prof_data.append({
-                        "순위": i,
-                        "교수명": prof_info.get("NM", ""),
-                        "소속": f"{prof_info.get('COLG_NM', '')} {prof_info.get('HG_NM', '')}".strip(),
-                        "종합 점수": f"{prof.get('total_score', 0):.4f}",
-                        "특허": f"{scores.get('patent', 0):.4f}",
-                        "논문": f"{scores.get('article', 0):.4f}",
-                        "연구과제": f"{scores.get('project', 0):.4f}"
-                    })
+            # 전체 파이프라인 실행 (캐시된 retriever 사용)
+            report_data = generator.generate_report_from_query(
+                query=query,
+                doc_types=doc_types,
+                few_shot_examples=few_shot_examples,
+                retriever=retriever
+            )
 
-                df = pd.DataFrame(prof_data)
-                st.dataframe(df, use_container_width=True)
+            progress_bar.progress(70)
+            status_text.text("RAG·AHP·REPORT 결과 로그 저장 중...")
+
+            # results/runs 하위에 RAG, AHP, REPORT 각각 로그로 저장 (동일 타임스탬프)
+            ts = report_data.get("timestamp", datetime.now().strftime("%Y%m%d_%H%M%S"))
+            base = Path("results/runs")
+            (base / "rag").mkdir(parents=True, exist_ok=True)
+            (base / "ahp").mkdir(parents=True, exist_ok=True)
+            (base / "report").mkdir(parents=True, exist_ok=True)
+            rag_path = base / "rag" / f"rag_{ts}.json"
+            ahp_path = base / "ahp" / f"ahp_results_{ts}.json"
+            with open(rag_path, "w", encoding="utf-8") as f:
+                json.dump(report_data.get("rag_results", {}), f, ensure_ascii=False, indent=2)
+            with open(ahp_path, "w", encoding="utf-8") as f:
+                json.dump(report_data.get("ahp_results", {}), f, ensure_ascii=False, indent=2)
+
+            progress_bar.progress(90)
+            status_text.text("PDF 저장 중...")
+
+            pdf_path = generator.save_pdf(report_data)
+
+            progress_bar.progress(100)
+            status_text.text("완료!")
+
+            cost_result = report_data.get("api_cost")
+            st.success(f"✅ 리포트 생성 완료!")
+            st.info(
+                f"**저장된 로그** · RAG: `{rag_path}` · AHP: `{ahp_path}` · "
+                + (f"PDF: `{pdf_path}`" if pdf_path and pdf_path.exists() else "PDF: 저장 실패")
+            )
+            if not (pdf_path and pdf_path.exists()):
+                st.warning("PDF 저장 실패. pip install fpdf2 확인 후 다시 시도하세요.")
+            if cost_result and cost_result.get('total_cost_usd', 0) > 0:
+                st.caption(f"API 비용: ${cost_result['total_cost_usd']:.6f}")
 
             st.markdown("---")
+            st.markdown("### 📄 생성된 보고서")
 
-            # 리포트 생성 버튼
-            if st.button("🚀 리포트 생성", type="primary", key="file_generate"):
-                # Few-shot 업로드 파일 처리
-                if few_shot_file:
-                    try:
-                        few_shot_data = json.load(few_shot_file)
-                        if isinstance(few_shot_data, list):
-                            few_shot_examples = few_shot_data
-                        elif isinstance(few_shot_data, dict) and "examples" in few_shot_data:
-                            few_shot_examples = few_shot_data["examples"]
-                    except Exception as e:
-                        st.warning(f"Few-shot 파일 로드 실패: {e}")
+            report_text = report_data.get("report_text", "")
+            st.markdown(report_text)
 
-                progress_bar = st.progress(0)
-                status_text = st.empty()
+            with st.expander("📋 원본 텍스트 보기"):
+                st.text_area("리포트 원본", value=report_text, height=320, disabled=True, label_visibility="collapsed")
 
-                try:
-                    # 비용 추적 시작
-                    tracker = get_cost_tracker()
-                    tracker.start_task("streamlit_report", description=f"Streamlit 리포트: {selected_ahp_file}")
+            with st.expander("🔍 입력 데이터 (디버깅)"):
+                st.json(report_data.get("input_data", {}))
 
-                    generator = ReportGenerator(api_key=api_key)
-
-                    status_text.text("GPT-4o-mini를 사용하여 리포트 생성 중...")
-                    progress_bar.progress(50)
-
-                    report_data = generator.generate_report(
-                        ahp_results=ahp_results,
-                        rag_results=rag_results,
-                        few_shot_examples=few_shot_examples
-                    )
-
-                    progress_bar.progress(100)
-                    status_text.text("완료!")
-
-                    json_path = generator.save_json(report_data)
-                    text_path = generator.save_text(report_data)
-
-                    # 비용 추적 종료
-                    cost_result = tracker.end_task()
-
-                    st.success(f"✅ 리포트 생성 완료!")
-                    if cost_result and cost_result.get('total_cost_usd', 0) > 0:
-                        st.info(f"저장 위치: {json_path.parent} | API 비용: ${cost_result['total_cost_usd']:.6f}")
-                    else:
-                        st.info(f"저장 위치: {json_path.parent}")
-
-                    # 생성된 리포트 표시
-                    st.markdown("---")
-                    st.header("📄 생성된 리포트")
-
-                    report_text = report_data.get("report_text", "")
-                    st.markdown(report_text)
-
-                    with st.expander("📋 원본 텍스트 보기"):
-                        st.text_area("리포트 원본", value=report_text, height=400, disabled=True)
-
-                    with st.expander("🔍 입력 데이터 확인 (디버깅)"):
-                        st.json(report_data.get("input_data", {}))
-
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.download_button(
-                            label="📥 JSON 다운로드",
-                            data=json.dumps(report_data, ensure_ascii=False, indent=2),
-                            file_name=json_path.name,
-                            mime="application/json",
-                            key="file_json_download"
-                        )
-                    with col2:
-                        st.download_button(
-                            label="📥 TXT 다운로드",
-                            data=report_text,
-                            file_name=text_path.name,
-                            mime="text/plain",
-                            key="file_txt_download"
-                        )
-
-                except Exception as e:
-                    st.error(f"❌ 오류 발생: {str(e)}")
-                    st.exception(e)
-                finally:
-                    progress_bar.empty()
-                    status_text.empty()
+            st.markdown("---")
+            st.markdown("**PDF 다운로드**")
+            if pdf_path and pdf_path.exists():
+                st.download_button(
+                    label="📥 PDF 다운로드",
+                    data=pdf_path.read_bytes(),
+                    file_name=pdf_path.name,
+                    mime="application/pdf",
+                    key="query_pdf_download"
+                )
+            else:
+                st.caption("PDF를 생성하려면: pip install markdown weasyprint")
+                st.caption("또는 브라우저에서 인쇄(Ctrl+P) → PDF로 저장")
 
         except Exception as e:
-            st.error(f"❌ 파일 로드 오류: {str(e)}")
+            st.error(f"❌ 오류 발생: {str(e)}")
             st.exception(e)
+        finally:
+            progress_bar.empty()
+            status_text.empty()
 
 
-# 푸터
+# 푸터 (인디고/RISE 스타일 참고)
 st.markdown("---")
 st.markdown(
-    "<div style='text-align: center; color: gray;'>INU LLM RAG Matching Engine - 리포트 생성 시스템</div>",
+    "<p style='text-align: center; color: #5a6c7d; font-size: 0.8rem; padding: 1rem 0; border-top: 1px solid rgba(203,213,224,0.8); margin-top: 1.5rem;'>INU 산학매칭지원 · 산학 매칭 추천 리포트 | INU LLM RAG Matching Engine</p>",
     unsafe_allow_html=True
 )

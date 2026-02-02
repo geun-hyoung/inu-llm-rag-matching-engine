@@ -26,7 +26,7 @@ def main():
     parser.add_argument(
         "--ahp-file",
         type=str,
-        default="results/test/ahp/ahp_results_20260127_220100.json",
+        default="results/runs/ahp/ahp_results_20260127_220100.json",
         help="AHP 결과 JSON 파일 경로"
     )
     parser.add_argument(
@@ -50,7 +50,7 @@ def main():
     parser.add_argument(
         "--output-dir",
         type=str,
-        default="results/test/report",
+        default="results/runs/report",
         help="리포트 출력 디렉토리"
     )
     
