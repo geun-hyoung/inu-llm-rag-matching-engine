@@ -509,10 +509,1285 @@
       },
       "total_cost_usd": 0.0019911,
       "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-01T23:12:37.482461",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 서비스 공학 전문가...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1144,
+          "output_tokens": 17,
+          "cost_usd": 0.0001818
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 4643,
+          "output_tokens": 978,
+          "cost_usd": 0.00128325
+        }
+      },
+      "total_cost_usd": 0.00146505,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-01T23:13:34.551930",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 자연어 처리 관련 연구를 수행한 교수님을 찾고 싶어....",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1155,
+          "output_tokens": 31,
+          "cost_usd": 0.00019184999999999997
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6000,
+          "output_tokens": 1110,
+          "cost_usd": 0.0015660000000000001
+        }
+      },
+      "total_cost_usd": 0.00175785,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-01T23:32:32.524789",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 전자 소비에 대해서 사용자 행동에 대해서 조사한 연구를...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1155,
+          "output_tokens": 34,
+          "cost_usd": 0.00019365
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 5505,
+          "output_tokens": 1003,
+          "cost_usd": 0.00142755
+        }
+      },
+      "total_cost_usd": 0.0016212000000000002,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T00:31:54.914416",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 전기 사용량에 따라서 사용자 행동 변화에 대해서 연구한...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1160,
+          "output_tokens": 39,
+          "cost_usd": 0.0001974
+        },
+        "embedding": {
+          "calls": 2,
+          "input_tokens": 36,
+          "output_tokens": 0,
+          "cost_usd": 7.200000000000001e-07
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 3715,
+          "output_tokens": 209,
+          "cost_usd": 0.00068265
+        }
+      },
+      "total_cost_usd": 0.00088077,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T00:56:46.321864",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 딥러닝 기반 의료 영상 분석 기술 전문가...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1150,
+          "output_tokens": 41,
+          "cost_usd": 0.0001971
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 7846,
+          "output_tokens": 1182,
+          "cost_usd": 0.0018861
+        }
+      },
+      "total_cost_usd": 0.0020832,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T00:57:17.668085",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 딥러닝 기반 자연어 처리 전문가...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1149,
+          "output_tokens": 40,
+          "cost_usd": 0.00019635000000000003
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 7824,
+          "output_tokens": 1846,
+          "cost_usd": 0.0022811999999999997
+        }
+      },
+      "total_cost_usd": 0.00247755,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T01:02:37.447828",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: TJQLTM ...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1143,
+          "output_tokens": 13,
+          "cost_usd": 0.00017925
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 3532,
+          "output_tokens": 200,
+          "cost_usd": 0.0006498
+        }
+      },
+      "total_cost_usd": 0.00082905,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T01:03:45.457081",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 서비스 블루 프린트 관련 연구 담당자를 찾고 싶어...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1154,
+          "output_tokens": 35,
+          "cost_usd": 0.0001941
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 5840,
+          "output_tokens": 997,
+          "cost_usd": 0.0014742
+        }
+      },
+      "total_cost_usd": 0.0016683,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T01:04:36.189426",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 서비스 블루 프린트 전문가를 찾고 싶어...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1152,
+          "output_tokens": 28,
+          "cost_usd": 0.0001896
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6175,
+          "output_tokens": 1402,
+          "cost_usd": 0.0017674499999999998
+        }
+      },
+      "total_cost_usd": 0.0019570499999999997,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T01:05:48.978472",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 서비스 블루 프린트 전문가를 찾고 싶어...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1152,
+          "output_tokens": 28,
+          "cost_usd": 0.0001896
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6175,
+          "output_tokens": 1402,
+          "cost_usd": 0.0017674499999999998
+        }
+      },
+      "total_cost_usd": 0.0019570499999999997,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T01:08:53.436750",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 서비스 블루프린트 전문가를 찾고 싶어....",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1152,
+          "output_tokens": 28,
+          "cost_usd": 0.0001896
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6168,
+          "output_tokens": 1404,
+          "cost_usd": 0.0017675999999999998
+        }
+      },
+      "total_cost_usd": 0.0019571999999999997,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T01:12:04.885200",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 서비스 블루 프린트 전문가를 찾고 싶어...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1152,
+          "output_tokens": 28,
+          "cost_usd": 0.0001896
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6175,
+          "output_tokens": 1402,
+          "cost_usd": 0.0017674499999999998
+        }
+      },
+      "total_cost_usd": 0.0019570499999999997,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T01:16:03.999392",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 서비스 블루 프린트 전문가를 찾고 싶어...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1152,
+          "output_tokens": 28,
+          "cost_usd": 0.0001896
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6175,
+          "output_tokens": 1402,
+          "cost_usd": 0.0017674499999999998
+        }
+      },
+      "total_cost_usd": 0.0019570499999999997,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T01:17:52.245699",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 서비스 블루 프린트 전문가를 찾고 싶어...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1152,
+          "output_tokens": 28,
+          "cost_usd": 0.0001896
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6175,
+          "output_tokens": 1402,
+          "cost_usd": 0.0017674499999999998
+        }
+      },
+      "total_cost_usd": 0.0019570499999999997,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T01:21:29.213364",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 서비스 블루 프린트 전문가를 찾고 싶어...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1152,
+          "output_tokens": 28,
+          "cost_usd": 0.0001896
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6175,
+          "output_tokens": 1402,
+          "cost_usd": 0.0017674499999999998
+        }
+      },
+      "total_cost_usd": 0.0019570499999999997,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T01:44:30.036329",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 서비스 블루 프린트 전문가를 찾고 싶어...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1152,
+          "output_tokens": 28,
+          "cost_usd": 0.0001896
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6175,
+          "output_tokens": 1402,
+          "cost_usd": 0.0017674499999999998
+        }
+      },
+      "total_cost_usd": 0.0019570499999999997,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T02:02:54.147529",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 서비스 블루 프린트 전문가를 찾고 싶어...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1152,
+          "output_tokens": 28,
+          "cost_usd": 0.0001896
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6175,
+          "output_tokens": 1402,
+          "cost_usd": 0.0017674499999999998
+        }
+      },
+      "total_cost_usd": 0.0019570499999999997,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T02:08:41.136701",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 서비스 블루 프린트 전문가를 찾고 싶어...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1152,
+          "output_tokens": 28,
+          "cost_usd": 0.0001896
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6175,
+          "output_tokens": 1402,
+          "cost_usd": 0.0017674499999999998
+        }
+      },
+      "total_cost_usd": 0.0019570499999999997,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T02:09:23.825421",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 서비스 블루 프린트 전문가를 찾고 싶어...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1152,
+          "output_tokens": 28,
+          "cost_usd": 0.0001896
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6175,
+          "output_tokens": 1402,
+          "cost_usd": 0.0017674499999999998
+        }
+      },
+      "total_cost_usd": 0.0019570499999999997,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T11:00:05.746960",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 서비스 블루 프린트 전문가를 찾고 싶어....",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1152,
+          "output_tokens": 28,
+          "cost_usd": 0.0001896
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6175,
+          "output_tokens": 1402,
+          "cost_usd": 0.0017674499999999998
+        }
+      },
+      "total_cost_usd": 0.0019570499999999997,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T11:08:39.026652",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 서비스 블루 프린트 전문가를 찾고 싶어....",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1152,
+          "output_tokens": 34,
+          "cost_usd": 0.0001932
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6175,
+          "output_tokens": 1402,
+          "cost_usd": 0.0017674499999999998
+        }
+      },
+      "total_cost_usd": 0.00196065,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T11:14:47.007127",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 서비스 블루 프린트 전문가를 찾고 싶어...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1152,
+          "output_tokens": 28,
+          "cost_usd": 0.0001896
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6175,
+          "output_tokens": 1402,
+          "cost_usd": 0.0017674499999999998
+        }
+      },
+      "total_cost_usd": 0.0019570499999999997,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T11:31:37.536864",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 서비스 블루 프린트 전문가를 찾고 싶어...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1152,
+          "output_tokens": 28,
+          "cost_usd": 0.0001896
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6175,
+          "output_tokens": 1402,
+          "cost_usd": 0.0017674499999999998
+        }
+      },
+      "total_cost_usd": 0.0019570499999999997,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T11:44:30.816547",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 전기 사용량에 따라서 사용자 행동 변화에 대해서 연구한...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1160,
+          "output_tokens": 41,
+          "cost_usd": 0.0001986
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6382,
+          "output_tokens": 1136,
+          "cost_usd": 0.0016389
+        }
+      },
+      "total_cost_usd": 0.0018375,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T11:50:05.091666",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 전력 사용량에 따라서 사용자 행동 변화에 대해서 연구한...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1160,
+          "output_tokens": 40,
+          "cost_usd": 0.000198
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6430,
+          "output_tokens": 1285,
+          "cost_usd": 0.0017354999999999998
+        }
+      },
+      "total_cost_usd": 0.0019334999999999999,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T11:55:16.744506",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 서비스 블루 프린트 전문가를 찾고 싶어...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1152,
+          "output_tokens": 28,
+          "cost_usd": 0.0001896
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6175,
+          "output_tokens": 1402,
+          "cost_usd": 0.0017674499999999998
+        }
+      },
+      "total_cost_usd": 0.0019570499999999997,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T12:00:39.866125",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 서비스 블루 프린트 전문가를 찾고 싶어...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1152,
+          "output_tokens": 28,
+          "cost_usd": 0.0001896
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6175,
+          "output_tokens": 1303,
+          "cost_usd": 0.00170805
+        }
+      },
+      "total_cost_usd": 0.00189765,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T13:34:47.641983",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 서비스 블루 프린트 전문가를 찾고 싶어...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1152,
+          "output_tokens": 28,
+          "cost_usd": 0.0001896
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6175,
+          "output_tokens": 1192,
+          "cost_usd": 0.00164145
+        }
+      },
+      "total_cost_usd": 0.00183105,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T13:54:26.192055",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 서비스 블루 프린트 전문가를 찾고 싶어...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1152,
+          "output_tokens": 28,
+          "cost_usd": 0.0001896
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6175,
+          "output_tokens": 1192,
+          "cost_usd": 0.00164145
+        }
+      },
+      "total_cost_usd": 0.00183105,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T13:58:19.625490",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 3D 프린터를 활용한 적층 제조 관련 기술...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1154,
+          "output_tokens": 41,
+          "cost_usd": 0.0001977
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6891,
+          "output_tokens": 1320,
+          "cost_usd": 0.00182565
+        }
+      },
+      "total_cost_usd": 0.00202335,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T13:59:41.875323",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 이상치 탐지 및 머신 러닝 기술...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1149,
+          "output_tokens": 42,
+          "cost_usd": 0.00019755
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6704,
+          "output_tokens": 1001,
+          "cost_usd": 0.0016062
+        }
+      },
+      "total_cost_usd": 0.0018037499999999998,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T14:02:51.085867",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 자연어 처리...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1143,
+          "output_tokens": 35,
+          "cost_usd": 0.00019245
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6949,
+          "output_tokens": 1305,
+          "cost_usd": 0.0018253499999999999
+        }
+      },
+      "total_cost_usd": 0.0020177999999999997,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T14:03:51.545453",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 텍스트 마이닝...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1146,
+          "output_tokens": 33,
+          "cost_usd": 0.0001917
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6066,
+          "output_tokens": 1235,
+          "cost_usd": 0.0016508999999999999
+        }
+      },
+      "total_cost_usd": 0.0018425999999999998,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T14:06:27.099623",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 강화학습을 이용한 공장이나 물류 최적화 관련 기술...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1156,
+          "output_tokens": 49,
+          "cost_usd": 0.0002028
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6775,
+          "output_tokens": 940,
+          "cost_usd": 0.00158025
+        }
+      },
+      "total_cost_usd": 0.00178305,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T14:11:49.513384",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 강화학습을 이용한 공장이나 물류 최적화 관련 기술...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1156,
+          "output_tokens": 49,
+          "cost_usd": 0.0002028
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6775,
+          "output_tokens": 928,
+          "cost_usd": 0.0015730499999999999
+        }
+      },
+      "total_cost_usd": 0.0017758499999999998,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T14:12:47.652047",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 제조 공정과 CAD를 이용 관련 기술...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1149,
+          "output_tokens": 37,
+          "cost_usd": 0.00019455
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6899,
+          "output_tokens": 1408,
+          "cost_usd": 0.0018796499999999999
+        }
+      },
+      "total_cost_usd": 0.0020742,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T14:45:20.349227",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 자연어 처리...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1143,
+          "output_tokens": 36,
+          "cost_usd": 0.00019305
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6770,
+          "output_tokens": 1248,
+          "cost_usd": 0.0017643
+        }
+      },
+      "total_cost_usd": 0.00195735,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T16:01:00.682891",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 서비스 블루 프린트 전문가를 찾고 싶어...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1152,
+          "output_tokens": 28,
+          "cost_usd": 0.0001896
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6175,
+          "output_tokens": 1403,
+          "cost_usd": 0.00176805
+        }
+      },
+      "total_cost_usd": 0.00195765,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T16:10:33.523209",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 이상치 탐지 및 머신 러닝 기술...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1149,
+          "output_tokens": 41,
+          "cost_usd": 0.00019695000000000002
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6826,
+          "output_tokens": 1132,
+          "cost_usd": 0.0017031
+        }
+      },
+      "total_cost_usd": 0.00190005,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T16:13:47.595494",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 이상치 탐지 및 머신 러닝 기술...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1149,
+          "output_tokens": 41,
+          "cost_usd": 0.00019695000000000002
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6826,
+          "output_tokens": 1135,
+          "cost_usd": 0.0017048999999999999
+        }
+      },
+      "total_cost_usd": 0.0019018499999999999,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T16:17:02.143829",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 이상치 탐지 및 머신 러닝 기술...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1149,
+          "output_tokens": 41,
+          "cost_usd": 0.00019695000000000002
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6826,
+          "output_tokens": 1135,
+          "cost_usd": 0.0017048999999999999
+        }
+      },
+      "total_cost_usd": 0.0019018499999999999,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T16:26:32.655480",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 이상치 탐지 및 머신 러닝 기술...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1149,
+          "output_tokens": 41,
+          "cost_usd": 0.00019695000000000002
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 8388,
+          "output_tokens": 1726,
+          "cost_usd": 0.0022938
+        }
+      },
+      "total_cost_usd": 0.00249075,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T17:35:51.478106",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 이상치 탐지 및 머신 러닝 기술...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1213,
+          "output_tokens": 63,
+          "cost_usd": 0.00021975
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 8274,
+          "output_tokens": 1747,
+          "cost_usd": 0.0022893
+        }
+      },
+      "total_cost_usd": 0.00250905,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T17:38:37.367431",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 이상치 탐지를 위한 기술...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1210,
+          "output_tokens": 52,
+          "cost_usd": 0.0002127
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 7765,
+          "output_tokens": 1285,
+          "cost_usd": 0.00193575
+        }
+      },
+      "total_cost_usd": 0.00214845,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T17:40:11.343135",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 베어링에 대한 이상치 탐지를 위한 기술...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1215,
+          "output_tokens": 59,
+          "cost_usd": 0.00021764999999999998
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6973,
+          "output_tokens": 1299,
+          "cost_usd": 0.0018253499999999999
+        }
+      },
+      "total_cost_usd": 0.0020429999999999997,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T17:57:47.979616",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 베어링에 대한 이상치 탐지를 위한 기술...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1215,
+          "output_tokens": 73,
+          "cost_usd": 0.00022605
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 7880,
+          "output_tokens": 1770,
+          "cost_usd": 0.002244
+        }
+      },
+      "total_cost_usd": 0.0024700499999999997,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T17:59:55.965945",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 공정에서 이상치 탐지를 위한 기술...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1213,
+          "output_tokens": 57,
+          "cost_usd": 0.00021615
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6783,
+          "output_tokens": 1555,
+          "cost_usd": 0.0019504499999999998
+        }
+      },
+      "total_cost_usd": 0.0021666,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T18:04:24.063434",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 베어링의 이상치 탐지를 위한 기술...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1214,
+          "output_tokens": 59,
+          "cost_usd": 0.0002175
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 7305,
+          "output_tokens": 1557,
+          "cost_usd": 0.00202995
+        }
+      },
+      "total_cost_usd": 0.00224745,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T18:06:32.225767",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 베어링 이상치 탐지를 위한 기술...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1213,
+          "output_tokens": 59,
+          "cost_usd": 0.00021735
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 7108,
+          "output_tokens": 1363,
+          "cost_usd": 0.001884
+        }
+      },
+      "total_cost_usd": 0.00210135,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T18:07:40.308871",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 전기 사용량에 따라서 사용자 행동 변화에 대해서 연구한...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1224,
+          "output_tokens": 75,
+          "cost_usd": 0.00022859999999999997
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6954,
+          "output_tokens": 1356,
+          "cost_usd": 0.0018566999999999998
+        }
+      },
+      "total_cost_usd": 0.0020852999999999996,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T18:18:05.643303",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 공정에서 이상치 탐지를 위한 기술...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1213,
+          "output_tokens": 57,
+          "cost_usd": 0.00021615
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 6783,
+          "output_tokens": 1555,
+          "cost_usd": 0.0019504499999999998
+        }
+      },
+      "total_cost_usd": 0.0021666,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T18:19:55.376349",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 베어링에 대한 이상치 탐지를 위한 기술...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1215,
+          "output_tokens": 73,
+          "cost_usd": 0.00022605
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 7308,
+          "output_tokens": 1651,
+          "cost_usd": 0.0020867999999999998
+        }
+      },
+      "total_cost_usd": 0.00231285,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-02T19:39:38.559872",
+      "task": "indexing",
+      "description": "article 문서 인덱싱",
+      "components": {
+        "entity_extraction_async": {
+          "calls": 7562,
+          "input_tokens": 36718970,
+          "output_tokens": 4063831,
+          "cost_usd": 7.946144099999987
+        }
+      },
+      "total_cost_usd": 7.946144099999987,
+      "metadata": {
+        "docs_processed": 7869,
+        "entities_extracted": 47679,
+        "relations_extracted": 31004,
+        "entities_after_merge": 45252,
+        "relations_after_merge": 30815,
+        "chunks_stored": 8122,
+        "errors": 0,
+        "failed_docs": 253
+      }
+    },
+    {
+      "timestamp": "2026-02-03T03:20:48.093375",
+      "task": "indexing",
+      "description": "project 문서 인덱싱",
+      "components": {
+        "entity_extraction_async": {
+          "calls": 1451,
+          "input_tokens": 7677144,
+          "output_tokens": 1287266,
+          "cost_usd": 1.923931199999999
+        }
+      },
+      "total_cost_usd": 1.923931199999999,
+      "metadata": {
+        "docs_processed": 1447,
+        "entities_extracted": 13331,
+        "relations_extracted": 8338,
+        "entities_after_merge": 8111,
+        "relations_after_merge": 6310,
+        "chunks_stored": 1451,
+        "errors": 0,
+        "failed_docs": 4
+      }
+    },
+    {
+      "timestamp": "2026-02-03T05:10:46.036739",
+      "task": "indexing",
+      "description": "patent 문서 인덱싱",
+      "components": {
+        "entity_extraction_async": {
+          "calls": 296,
+          "input_tokens": 1417565,
+          "output_tokens": 153308,
+          "cost_usd": 0.30461954999999985
+        }
+      },
+      "total_cost_usd": 0.30461954999999985,
+      "metadata": {
+        "docs_processed": 296,
+        "entities_extracted": 1568,
+        "relations_extracted": 1046,
+        "entities_after_merge": 1487,
+        "relations_after_merge": 1029,
+        "chunks_stored": 296,
+        "errors": 0,
+        "failed_docs": 0
+      }
+    },
+    {
+      "timestamp": "2026-02-03T09:43:14.637128",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 베어링에 대한 이상치 탐지를 위한 기술...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1215,
+          "output_tokens": 73,
+          "cost_usd": 0.00022605
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 7781,
+          "output_tokens": 1174,
+          "cost_usd": 0.0018715499999999996
+        }
+      },
+      "total_cost_usd": 0.0020976,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-03T09:46:21.092955",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 전기 사용량에 따른 사용자 패턴 변화 분석하고싶어요...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1218,
+          "output_tokens": 66,
+          "cost_usd": 0.00022229999999999998
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 7115,
+          "output_tokens": 1491,
+          "cost_usd": 0.00196185
+        }
+      },
+      "total_cost_usd": 0.0021841499999999997,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-03T09:51:49.364457",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 베어링에 대한 이상치 탐지를 위한 기술...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1215,
+          "output_tokens": 59,
+          "cost_usd": 0.00021764999999999998
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 7483,
+          "output_tokens": 921,
+          "cost_usd": 0.00167505
+        }
+      },
+      "total_cost_usd": 0.0018927,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-03T09:52:52.264526",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 베어링의 이상치 탐지를 위한 기술...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1214,
+          "output_tokens": 59,
+          "cost_usd": 0.0002175
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 7482,
+          "output_tokens": 1080,
+          "cost_usd": 0.0017702999999999998
+        }
+      },
+      "total_cost_usd": 0.0019877999999999996,
+      "metadata": {}
+    },
+    {
+      "timestamp": "2026-02-03T09:54:04.302528",
+      "task": "full_pipeline",
+      "description": "전체 파이프라인: 베어링 고장 진단 알고리즘에 대한 연구가 있어요?...",
+      "components": {
+        "keyword_extraction": {
+          "calls": 1,
+          "input_tokens": 1220,
+          "output_tokens": 80,
+          "cost_usd": 0.00023099999999999998
+        },
+        "report_generation": {
+          "calls": 1,
+          "input_tokens": 7577,
+          "output_tokens": 1211,
+          "cost_usd": 0.00186315
+        }
+      },
+      "total_cost_usd": 0.00209415,
+      "metadata": {}
     }
   ],
   "totals": {
-    "all_time_cost_usd": 0.9235627999999987,
+    "all_time_cost_usd": 11.216192719999974,
     "by_component": {
       "entity_extraction": {
         "calls": 619,
@@ -521,10 +1796,10 @@
         "cost_usd": 0.5783857500000001
       },
       "keyword_extraction": {
-        "calls": 72,
-        "input_tokens": 83520,
-        "output_tokens": 2999,
-        "cost_usd": 0.014327399999999997
+        "calls": 135,
+        "input_tokens": 157129,
+        "output_tokens": 5559,
+        "cost_usd": 0.026904750000000033
       },
       "noise_rate_eval": {
         "calls": 1700,
@@ -533,30 +1808,36 @@
         "cost_usd": 0.3268165499999998
       },
       "embedding": {
-        "calls": 24,
-        "input_tokens": 19465,
+        "calls": 26,
+        "input_tokens": 19501,
         "output_tokens": 0,
-        "cost_usd": 0.00038930000000000003
+        "cost_usd": 0.00039002000000000004
       },
       "report_generation": {
-        "calls": 2,
-        "input_tokens": 12328,
-        "output_tokens": 2991,
-        "cost_usd": 0.0036438
+        "calls": 62,
+        "input_tokens": 407000,
+        "output_tokens": 79918,
+        "cost_usd": 0.10900079999999997
+      },
+      "entity_extraction_async": {
+        "calls": 9309,
+        "input_tokens": 45813679,
+        "output_tokens": 5504405,
+        "cost_usd": 10.174694849999987
       }
     },
     "by_model": {
       "gpt-4o-mini": {
-        "calls": 2393,
-        "input_tokens": 4092346,
-        "output_tokens": 515536,
-        "cost_usd": 0.9231734999999988
+        "calls": 11825,
+        "input_tokens": 50374306,
+        "output_tokens": 6099428,
+        "cost_usd": 11.215802699999973
       },
       "text-embedding-3-small": {
-        "calls": 24,
-        "input_tokens": 19465,
+        "calls": 26,
+        "input_tokens": 19501,
         "output_tokens": 0,
-        "cost_usd": 0.00038930000000000003
+        "cost_usd": 0.00039002000000000004
       }
     }
   }
