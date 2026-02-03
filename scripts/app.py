@@ -5,6 +5,7 @@ Streamlit 앱 - 산학 매칭 리포트 생성 시스템
 """
 
 import streamlit as st
+import streamlit.components.v1 as components
 import json
 import sys
 from pathlib import Path
@@ -56,17 +57,20 @@ def get_retriever(_embedder, _vector_store, doc_types_tuple: tuple):
 
 # 페이지 설정 (사이드바 미사용)
 st.set_page_config(
-    page_title="INU 산학 매칭 리포트",
+    page_title="의미 기반 검색과 생성형 AI를 활용한 산학 매칭 추천 시스템",
     page_icon="📋",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# ===== 커스텀 CSS: 인디고/RISE 스타일 참고 (서늘한 하늘색·깔끔한 UI) =====
+# ===== 커스텀 CSS: 눈 피로 완화·아이콘과 조화 =====
 st.markdown("""
 <style>
-    /* 배경: 서늘한 하늘색·회색 (눈부심 완화) */
-    .stApp { background: linear-gradient(180deg, #e8eef4 0%, #e2e8f0 50%, #dde4ec 100%) !important; }
+    /* 배경: 부드러운 회청색 (눈부심 감소, 📋 등 아이콘과 조화) */
+    .stApp { background: linear-gradient(180deg, #e2e6ec 0%, #dce0e6 50%, #d4dae2 100%) !important; }
+    
+    /* 메인 콘텐츠 영역(중간 배경): 읽기 편한 은은한 회색 */
+    .main .block-container { background: #eaecf0 !important; border-radius: 0 0 16px 16px !important; }
     
     /* 메인 본문 텍스트 */
     .main .block-container p, .main .block-container li, .main .block-container span,
@@ -87,23 +91,23 @@ st.markdown("""
     [data-testid="stSidebar"] { display: none !important; }
     .main .block-container { max-width: 100% !important; padding-left: 2rem !important; padding-right: 2rem !important; }
     
-    /* 상단 헤더 배너 (카드 느낌) */
+    /* 상단 헤더 배너: 보기 편한 연한 회색 (눈 부담 감소) */
     .main .block-container > div:first-child {
-        background: rgba(255,255,255,0.85) !important;
+        background: #f2f3f6 !important;
         border-radius: 12px !important;
         padding: 1.25rem 1.5rem !important;
         margin-bottom: 1rem !important;
-        box-shadow: 0 2px 12px rgba(30, 58, 95, 0.08) !important;
-        border: 1px solid rgba(226, 232, 240, 0.9) !important;
+        box-shadow: 0 2px 12px rgba(30, 58, 95, 0.06) !important;
+        border: 1px solid rgba(203, 213, 224, 0.6) !important;
     }
     
-    /* 탭: RISE 스타일 깔끔한 메뉴 */
+    /* 탭: 배경과 어울리는 은은한 톤 */
     .stTabs [data-baseweb="tab-list"] {
         gap: 0.25rem !important;
-        background: rgba(255,255,255,0.6) !important;
+        background: #e8eaef !important;
         padding: 0.35rem !important;
         border-radius: 10px !important;
-        border: 1px solid rgba(203, 213, 224, 0.8) !important;
+        border: 1px solid rgba(203, 213, 224, 0.7) !important;
         box-shadow: 0 1px 4px rgba(0,0,0,0.04) !important;
     }
     .stTabs [data-baseweb="tab"] {
@@ -117,7 +121,7 @@ st.markdown("""
         color: #fff !important;
     }
     
-    /* 버튼: 원래 Streamlit 색상 유지, 반응형·터치 친화만 */
+    /* 버튼: 기본 반응형·터치 친화 */
     .stButton > button {
         border-radius: 8px !important;
         padding: 0.5rem 1.25rem !important;
@@ -127,6 +131,35 @@ st.markdown("""
     }
     .stButton > button:hover { transform: translateY(-1px) !important; }
     .stButton > button:active { transform: translateY(0) !important; }
+    /* 검색 폼 내 메인 버튼: 밝은 배경 + 진한 글자 (가독성 확보) */
+    .main form .stButton > button {
+        background-color: #ffffff !important;
+        border: 2px solid #1e3a5f !important;
+        font-weight: 600 !important;
+        color: #1e3a5f !important;
+        -webkit-text-fill-color: #1e3a5f !important;
+    }
+    .main form .stButton > button *,
+    .main form .stButton [data-testid="stMarkdown"],
+    .main form .stButton [data-testid="stMarkdown"] *,
+    .main form .stButton button p,
+    .main form .stButton button span,
+    .main form .stButton button div {
+        color: #1e3a5f !important;
+        -webkit-text-fill-color: #1e3a5f !important;
+    }
+    .main form .stButton > button:hover {
+        background-color: #e8eef4 !important;
+        border-color: #1e3a5f !important;
+        color: #1e3a5f !important;
+        -webkit-text-fill-color: #1e3a5f !important;
+    }
+    .main form .stButton > button:hover *,
+    .main form .stButton > button:hover [data-testid="stMarkdown"],
+    .main form .stButton > button:hover [data-testid="stMarkdown"] * {
+        color: #1e3a5f !important;
+        -webkit-text-fill-color: #1e3a5f !important;
+    }
     @media (max-width: 640px) {
         .stButton > button { min-height: 44px !important; padding: 0.6rem 1rem !important; width: 100% !important; }
     }
@@ -146,7 +179,7 @@ st.markdown("""
     /* 표 */
     .main table { border-collapse: collapse !important; border-radius: 8px !important; overflow: hidden !important; box-shadow: 0 1px 4px rgba(0,0,0,0.06) !important; }
     .main th { background: #e8eef4 !important; color: #1e3a5f !important; font-weight: 600 !important; padding: 0.6rem 0.75rem !important; }
-    .main td { color: #2d3748 !important; background: rgba(255,255,255,0.7) !important; padding: 0.5rem 0.75rem !important; }
+    .main td { color: #2d3748 !important; background: #f4f5f7 !important; padding: 0.5rem 0.75rem !important; }
     
     /* 메트릭·알림 */
     [data-testid="stMetricValue"] { font-weight: 600 !important; color: #1e3a5f !important; }
@@ -159,8 +192,29 @@ st.markdown("""
     /* 구분선 */
     hr { margin: 1.25rem 0 !important; border: none !important; border-top: 1px solid rgba(203, 213, 224, 0.8) !important; }
     
-    /* 다운로드 버튼 영역 */
-    .main [data-testid="column"] .stDownloadButton > button { border-radius: 8px !important; }
+    /* PDF 다운로드 버튼: 배경·글자색 조화 (가독성) */
+    .stDownloadButton > button,
+    .stDownloadButton > button *,
+    .stDownloadButton > button p,
+    .stDownloadButton > button span {
+        color: #1e3a5f !important;
+        -webkit-text-fill-color: #1e3a5f !important;
+    }
+    .stDownloadButton > button {
+        background-color: #ffffff !important;
+        border: 2px solid #1e3a5f !important;
+        font-weight: 600 !important;
+        border-radius: 8px !important;
+    }
+    .stDownloadButton > button:hover,
+    .stDownloadButton > button:hover * {
+        color: #1e3a5f !important;
+        -webkit-text-fill-color: #1e3a5f !important;
+    }
+    .stDownloadButton > button:hover {
+        background-color: #e8eef4 !important;
+        border-color: #1e3a5f !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -178,24 +232,70 @@ if default_few_shot_path.exists():
         pass
 
 # 헤더
-st.markdown("## 📋 산학 매칭 추천 리포트")
-st.caption("검색 쿼리 기반 RAG·AHP·리포트 자동 생성 | INU LLM RAG Matching Engine")
+st.markdown("## 의미 기반 검색과 생성형 AI를 활용한 산학 매칭 추천 시스템: AI가 만드는 산학 매칭 추천 보고서")
+st.caption("인천대학교 데이터사이언스 연구실")
 st.markdown("---")
 
-st.header("🔍 쿼리로 검색 & 리포트 생성")
-st.markdown("쿼리를 입력하면 **RAG 검색 → AHP 랭킹 → 리포트 생성**이 자동으로 실행됩니다.")
+# 검색 섹션: 트렌디·신뢰감 있는 문구와 뱃지
+st.markdown(
+    "<p style='font-size: 0.75rem; color: #5a6c7d; margin-bottom: 0.25rem;'>RAG · AHP · 생성형 AI 기반</p>",
+    unsafe_allow_html=True
+)
+st.markdown("### 한 번의 검색으로 AI 추천 보고서까지")
+st.markdown(
+    "검색어만 입력하면 **의미 기반 RAG 검색**으로 특허·논문·연구과제를 찾고, "
+    "**AHP 랭킹**과 **생성형 AI**가 산학 매칭 추천 보고서를 자동으로 만들어 드립니다. "
+    "데이터 기반의 신뢰할 수 있는 매칭 결과를 제공합니다."
+)
 
 # 폼 사용: 입력 중에는 스크립트 재실행 없음 → 반응성 개선. 제출 시에만 실행.
 with st.form("search_form", clear_on_submit=False):
     query = st.text_input(
         "검색 쿼리",
         placeholder="예: 딥러닝 의료영상 분석 기술 연구를 찾고 있어요",
-        help="산학협력 매칭을 위한 검색 쿼리를 입력하세요",
+        help="산학협력 매칭을 위한 검색 쿼리를 입력하세요. 구체적인 기술·분야 키워드를 넣으면 더 좋은 결과가 나옵니다.",
         key="query_input",
     )
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        submitted = st.form_submit_button("🚀 검색 & 리포트 생성", type="primary")
+    st.caption(
+        "**검색 팁** · 구체적인 **기술·분야 키워드**(예: 딥러닝, 의료영상, 배터리, 감성분석)를 포함하면 매칭 정확도가 올라갑니다. "
+        "· 하고 싶은 **기술 개발·연구 주제**를 문장으로 써도 됩니다(예: \"전기차 배터리 충전 시간 단축 기술\"). "
+        "· 너무 짧은 단어 하나만 쓰기보다는 **2~5개 키워드** 또는 **한 문장**으로 입력하는 것을 권장합니다."
+    )
+    col_btn, col_spacer = st.columns([1, 3])
+    with col_btn:
+        submitted = st.form_submit_button("🚀 검색 & 리포트 생성")
+# 버튼 스타일 JS 강제 (밝은 배경 + 진한 글자) — DOM에서 직접 적용
+_btn_style_js = """
+<script>
+(function applyBtnStyle() {
+  try {
+    var doc = window.parent.document;
+    var selectors = ['section[data-testid="stForm"] .stButton button', 'form .stButton button', '.main form .stButton button'];
+    var btn = null;
+    for (var i = 0; i < selectors.length; i++) {
+      btn = doc.querySelector(selectors[i]);
+      if (btn) break;
+    }
+    if (btn) {
+      btn.style.setProperty('background-color', '#ffffff', 'important');
+      btn.style.setProperty('color', '#1e3a5f', 'important');
+      btn.style.setProperty('-webkit-text-fill-color', '#1e3a5f', 'important');
+      btn.style.setProperty('border', '2px solid #1e3a5f', 'important');
+      btn.style.setProperty('font-weight', '600', 'important');
+      var nodes = btn.querySelectorAll('*');
+      for (var j = 0; j < nodes.length; j++) {
+        nodes[j].style.setProperty('color', '#1e3a5f', 'important');
+        nodes[j].style.setProperty('-webkit-text-fill-color', '#1e3a5f', 'important');
+      }
+    }
+  } catch (e) {}
+}
+applyBtnStyle();
+setTimeout(applyBtnStyle, 200);
+setTimeout(applyBtnStyle, 1000);
+</script>
+"""
+components.html(_btn_style_js, height=0)
 
 if submitted:
     if not api_key:
@@ -300,6 +400,37 @@ if submitted:
             progress_bar.empty()
             status_text.empty()
 
+
+# 페이지 맨 끝: 검색 버튼 스타일 강제 적용 (Streamlit DOM 구조 대응)
+st.markdown("""
+<style>
+    /* 폼 내 첫 번째 버튼 = 검색 & 리포트 생성 (여러 선택자로 확실히 적용) */
+    section[data-testid="stForm"] .stButton > button,
+    [data-testid="stForm"] .stButton > button,
+    form .stButton > button,
+    .main section .stButton > button,
+    .main form .stButton > button {
+        background-color: #ffffff !important;
+        background: #ffffff !important;
+        border: 2px solid #1e3a5f !important;
+        color: #1e3a5f !important;
+        -webkit-text-fill-color: #1e3a5f !important;
+        font-weight: 600 !important;
+    }
+    section[data-testid="stForm"] .stButton > button *,
+    [data-testid="stForm"] .stButton > button *,
+    form .stButton > button *,
+    .main form .stButton > button *,
+    .main form .stButton button p,
+    .main form .stButton button span,
+    .main form .stButton button div,
+    .main form .stButton [data-testid="stMarkdown"],
+    .main form .stButton [data-testid="stMarkdown"] * {
+        color: #1e3a5f !important;
+        -webkit-text-fill-color: #1e3a5f !important;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # 푸터 (인디고/RISE 스타일 참고)
 st.markdown("---")
