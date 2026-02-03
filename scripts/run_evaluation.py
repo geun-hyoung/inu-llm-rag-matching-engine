@@ -396,13 +396,15 @@ def run_comparison_evaluation(
         # 쿼리당 키워드 1번만 추출 (첫 번째 HybridRetriever 사용)
         first_hybrid = retrievers[doc_type_list[0]]["hybrid"]
         extracted_keywords = first_hybrid._extract_keywords(query_text)
-        print(f"  Extracted keywords - High: {extracted_keywords[0]}, Low: {extracted_keywords[1]}")
+        print(f"  Extracted keywords - High: {extracted_keywords['high_level']}, Low: {extracted_keywords['low_level']}")
 
         query_result = {
             "query": query_text,
             "extracted_keywords": {
-                "high_level": extracted_keywords[0],
-                "low_level": extracted_keywords[1]
+                "high_level": extracted_keywords["high_level"],
+                "high_level_en": extracted_keywords.get("high_level_en", []),
+                "low_level": extracted_keywords["low_level"],
+                "low_level_en": extracted_keywords.get("low_level_en", [])
             }
         }
 
