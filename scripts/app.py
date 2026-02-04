@@ -12,11 +12,18 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 from datetime import datetime
 import pandas as pd
+try:
+    import markdown
+except ImportError:
+    markdown = None
 
 sys.path.append(str(Path(__file__).parent.parent))
 from src.reporting.report_generator import ReportGenerator
-from config.settings import OPENAI_API_KEY
+from config.settings import OPENAI_API_KEY, RETRIEVAL_TOP_K, SIMILARITY_THRESHOLD
 from src.utils.cost_tracker import get_cost_tracker
+from src.ranking.professor_aggregator import ProfessorAggregator
+from src.ranking.ranker import ProfessorRanker
+from config.ahp_config import DEFAULT_TYPE_WEIGHTS
 
 
 # ===== Streamlit 캐시 함수 (임베딩 모델, 벡터 저장소 등 최초 1회만 로드) =====
@@ -63,43 +70,176 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# ===== 커스텀 CSS: 눈 피로 완화·아이콘과 조화 =====
+# ===== 지정색 고정 CSS: 라이트/다크 모드에 맞춰 배경·텍스트 조화 =====
+# 라이트: 앱 배경 연한 회청(#f0f4f8), 카드/폼 흰색. 다크: 앱 배경 진한 회색(#1a1d23), 카드 흰색 유지.
 st.markdown("""
 <style>
-    /* 배경: 부드러운 회청색 (눈부심 감소, 📋 등 아이콘과 조화) */
-    .stApp { background: linear-gradient(180deg, #e2e6ec 0%, #dce0e6 50%, #d4dae2 100%) !important; }
-    
-    /* 메인 콘텐츠 영역(중간 배경): 읽기 편한 은은한 회색 */
-    .main .block-container { background: #eaecf0 !important; border-radius: 0 0 16px 16px !important; }
-    
-    /* 메인 본문 텍스트 */
-    .main .block-container p, .main .block-container li, .main .block-container span,
-    .main [data-testid="stMarkdown"] p, .main [data-testid="stMarkdown"] li {
-        color: #2d3748 !important;
+    /* 라이트 모드: 앱 배경만 연한 회청, 카드·폼은 흰색으로 대비 */
+    .stApp { color-scheme: light !important; }
+    .stApp, .main {
+        background: #f0f4f8 !important;
+        color: #1e3a5f !important;
+        -webkit-text-fill-color: #1e3a5f !important;
     }
-    
-    /* 제목 계층 */
-    .main h1 { font-weight: 700 !important; color: #1e3a5f !important; letter-spacing: -0.03em !important; }
-    .main h2 { font-weight: 600 !important; color: #1e3a5f !important; letter-spacing: -0.02em !important; margin-top: 1.25rem !important; }
-    .main h3 { font-weight: 600 !important; color: #2c5282 !important; }
-    .main h4 { font-weight: 600 !important; color: #2d3748 !important; }
-    
-    /* 캡션 */
-    .main [data-testid="stCaptionContainer"] { color: #5a6c7d !important; }
+    .main .block-container {
+        background: #ffffff !important;
+        color: #1e3a5f !important;
+        -webkit-text-fill-color: #1e3a5f !important;
+        border-radius: 0 0 18px 18px !important;
+        box-shadow: 0 4px 24px rgba(30, 58, 95, 0.08) !important;
+    }
+    .main .block-container p, .main .block-container li, .main .block-container span,
+    .main .block-container label, .main .block-container h1, .main .block-container h2,
+    .main .block-container h3, .main .block-container h4, .main label, .main p, .main li, .main span {
+        color: #1e3a5f !important;
+        -webkit-text-fill-color: #1e3a5f !important;
+    }
+    .main h1, .main h2, .main h3, .main h4,
+    .main [data-testid="stMarkdown"] h1, .main [data-testid="stMarkdown"] h2,
+    .main [data-testid="stMarkdown"] h3, .main [data-testid="stMarkdown"] h4 {
+        font-weight: 600 !important; color: #1e3a5f !important; -webkit-text-fill-color: #1e3a5f !important; background: transparent !important;
+    }
+    .main [data-testid="stMarkdown"] p, .main [data-testid="stMarkdown"] li,
+    .main [data-testid="stMarkdown"] span, .main [data-testid="stMarkdown"] td {
+        color: #1e3a5f !important;
+        -webkit-text-fill-color: #1e3a5f !important;
+    }
+    section[data-testid="stForm"] {
+        background: #ffffff !important;
+        color: #1e3a5f !important;
+        -webkit-text-fill-color: #1e3a5f !important;
+        padding: 1.25rem 1.5rem !important;
+        border-radius: 12px !important;
+        border: 1px solid rgba(30, 58, 95, 0.2) !important;
+        margin: 0.5rem 0 !important;
+    }
+    section[data-testid="stForm"] label, section[data-testid="stForm"] p, section[data-testid="stForm"] span {
+        color: #1e3a5f !important;
+        -webkit-text-fill-color: #1e3a5f !important;
+    }
+    .main [data-testid="stMarkdown"] {
+        background: #ffffff !important;
+        color: #1e3a5f !important;
+        -webkit-text-fill-color: #1e3a5f !important;
+        padding: 1rem 1.25rem !important;
+        border-radius: 10px !important;
+        margin: 0.5rem 0 !important;
+        border: 1px solid rgba(30, 58, 95, 0.15) !important;
+    }
+    .main [data-testid="stMarkdown"] strong { color: #1e3a5f !important; -webkit-text-fill-color: #1e3a5f !important; }
+    .main [data-testid="stMarkdown"] hr { border-color: rgba(30, 58, 95, 0.25) !important; }
+    .main [data-testid="stMarkdown"] table, .main [data-testid="stMarkdown"] th { color: #1e3a5f !important; -webkit-text-fill-color: #1e3a5f !important; }
+    .main [data-testid="stMarkdown"] th { background: #e8eef4 !important; }
+    .main [data-testid="stCaptionContainer"] { color: #1e3a5f !important; -webkit-text-fill-color: #1e3a5f !important; }
+    .main .report-content-box, div.report-content-box {
+        background: #ffffff !important;
+        color: #1e3a5f !important;
+        -webkit-text-fill-color: #1e3a5f !important;
+        padding: 1.5rem 1.75rem !important;
+        border-radius: 12px !important;
+        border: 1px solid rgba(30, 58, 95, 0.2) !important;
+        margin: 0.75rem 0 !important;
+        box-shadow: 0 2px 12px rgba(30, 58, 95, 0.06) !important;
+        font-size: 0.95rem !important;
+    }
+    .main .report-content-box h1, div.report-content-box h1 { font-size: 1.15rem !important; }
+    .main .report-content-box h2, div.report-content-box h2 { font-size: 1.05rem !important; }
+    .main .report-content-box h3, div.report-content-box h3 { font-size: 1rem !important; }
+    .main .report-content-box h4, div.report-content-box h4 { font-size: 0.98rem !important; }
+    /* 관련 문서: 1단계=유형(동그라미), 2단계=실제 문서(세부 불릿) 가독성 */
+    .main .report-content-box ul, div.report-content-box ul {
+        list-style-type: circle !important;
+        padding-left: 1.5rem !important;
+        margin: 0.4rem 0 !important;
+        line-height: 1.5 !important;
+    }
+    .main .report-content-box ul ul, div.report-content-box ul ul {
+        list-style-type: disc !important;
+        padding-left: 1.5rem !important;
+        margin: 0.25rem 0 0.5rem 0 !important;
+    }
+    .main .report-content-box li, div.report-content-box li {
+        margin: 0.35rem 0 !important;
+        line-height: 1.5 !important;
+    }
+    .main .report-content-box li li, div.report-content-box li li {
+        margin: 0.25rem 0 !important;
+    }
+    .main .report-content-box p, .main .report-content-box li, .main .report-content-box span,
+    .main .report-content-box td, .main .report-content-box h1, .main .report-content-box h2,
+    .main .report-content-box h3, .main .report-content-box h4, .main .report-content-box strong,
+    div.report-content-box p, div.report-content-box li, div.report-content-box span,
+    div.report-content-box td, div.report-content-box h1, div.report-content-box h2,
+    div.report-content-box h3, div.report-content-box h4, div.report-content-box strong {
+        color: #1e3a5f !important;
+        -webkit-text-fill-color: #1e3a5f !important;
+    }
+    .main .report-content-box table, div.report-content-box table { color: #1e3a5f !important; -webkit-text-fill-color: #1e3a5f !important; }
+    .main .report-content-box th, div.report-content-box th { color: #1e3a5f !important; background: #e8eef4 !important; -webkit-text-fill-color: #1e3a5f !important; }
+    .main .report-content-box hr, div.report-content-box hr { border-color: rgba(30, 58, 95, 0.25) !important; }
+    /* 다크 모드: 앱 배경만 진한 회색, 카드·폼은 흰색 유지해 가독성 확보 */
+    [data-theme="dark"] .stApp { color-scheme: dark !important; background: #1a1d23 !important; color: #1e3a5f !important; -webkit-text-fill-color: #1e3a5f !important; }
+    [data-theme="dark"] .main { background: #1a1d23 !important; }
+    [data-theme="dark"] .stApp .main,
+    [data-theme="dark"] .stApp .main .block-container,
+    [data-theme="dark"] .stApp .main .block-container *,
+    [data-theme="dark"] .stApp .main [data-testid="stMarkdown"],
+    [data-theme="dark"] .stApp .main [data-testid="stMarkdown"] *,
+    [data-theme="dark"] .stApp .main section[data-testid="stForm"],
+    [data-theme="dark"] .stApp .main section[data-testid="stForm"] *,
+    [data-theme="dark"] .stApp .main .report-content-box,
+    [data-theme="dark"] .stApp .main .report-content-box *,
+    [data-theme="dark"] .stApp div.report-content-box,
+    [data-theme="dark"] .stApp div.report-content-box * {
+        color: #1e3a5f !important;
+        -webkit-text-fill-color: #1e3a5f !important;
+    }
+    [data-theme="dark"] .stApp .main .block-container,
+    [data-theme="dark"] .stApp .main [data-testid="stMarkdown"],
+    [data-theme="dark"] .stApp .main section[data-testid="stForm"],
+    [data-theme="dark"] .stApp .main .report-content-box,
+    [data-theme="dark"] .stApp div.report-content-box { background: #ffffff !important; }
+    [data-theme="dark"] .stApp [data-testid="stTextInput"] input,
+    [data-theme="dark"] .stApp .stTextInput input { background: #ffffff !important; color: #1e3a5f !important; -webkit-text-fill-color: #1e3a5f !important; }
+    /* 다크 모드: 폼 버튼도 네이비 + 흰 글자 (트렌디·학술 스타일) */
+    [data-theme="dark"] .stApp .stButton > button,
+    [data-theme="dark"] .stApp section[data-testid="stForm"] .stButton > button,
+    [data-theme="dark"] .stApp form .stButton > button {
+        background: linear-gradient(165deg, #1e3a5f 0%, #2c5282 100%) !important;
+        background-color: #1e3a5f !important;
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
+        border: none !important;
+        box-shadow: 0 2px 12px rgba(30, 58, 95, 0.35) !important;
+    }
+    [data-theme="dark"] .stApp .stButton > button *,
+    [data-theme="dark"] .stApp section[data-testid="stForm"] .stButton > button *,
+    [data-theme="dark"] .stApp form .stButton > button * {
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
+    }
+    [data-theme="dark"] .stApp [data-testid="stMetricValue"], [data-theme="dark"] .stApp [data-testid="stMetricLabel"] { color: #1e3a5f !important; -webkit-text-fill-color: #1e3a5f !important; }
+    [data-theme="dark"] .stApp .stDownloadButton > button { background: #ffffff !important; color: #1e3a5f !important; -webkit-text-fill-color: #1e3a5f !important; border-color: #1e3a5f !important; }
+    [data-theme="dark"] .stApp .stDownloadButton > button * { color: #1e3a5f !important; -webkit-text-fill-color: #1e3a5f !important; }
     
     /* 사이드바 숨김 */
     [data-testid="stSidebar"] { display: none !important; }
     .main .block-container { max-width: 100% !important; padding-left: 2rem !important; padding-right: 2rem !important; }
     
-    /* 상단 헤더 배너: 보기 편한 연한 회색 (눈 부담 감소) */
+    /* 상단 헤더 배너: 흰 배경 + 파란 글자 */
     .main .block-container > div:first-child {
-        background: #f2f3f6 !important;
-        border-radius: 12px !important;
-        padding: 1.25rem 1.5rem !important;
-        margin-bottom: 1rem !important;
-        box-shadow: 0 2px 12px rgba(30, 58, 95, 0.06) !important;
-        border: 1px solid rgba(203, 213, 224, 0.6) !important;
+        background: #ffffff !important;
+        color: #1e3a5f !important;
+        border-radius: 14px !important;
+        padding: 1.5rem 1.75rem !important;
+        margin-bottom: 1.25rem !important;
+        box-shadow: 0 2px 16px rgba(30, 58, 95, 0.08) !important;
+        border: 1px solid rgba(30, 58, 95, 0.15) !important;
     }
+    .main .block-container > div:first-child p,
+    .main .block-container > div:first-child h1,
+    .main .block-container > div:first-child h2,
+    .main .block-container > div:first-child span { color: #1e3a5f !important; -webkit-text-fill-color: #1e3a5f !important; }
     
     /* 탭: 배경과 어울리는 은은한 톤 */
     .stTabs [data-baseweb="tab-list"] {
@@ -131,48 +271,87 @@ st.markdown("""
     }
     .stButton > button:hover { transform: translateY(-1px) !important; }
     .stButton > button:active { transform: translateY(0) !important; }
-    /* 검색 폼 내 메인 버튼: 밝은 배경 + 진한 글자 (가독성 확보) */
-    .main form .stButton > button {
-        background-color: #ffffff !important;
-        border: 2px solid #1e3a5f !important;
+    /* 검색 & 리포트 생성 버튼: 트렌디·학술 (흰 글자만 확실히, 폼 내 모든 버튼 + primary 타깃) */
+    .main form .stButton > button,
+    section[data-testid="stForm"] .stButton > button,
+    section[data-testid="stForm"] button,
+    [data-testid="stForm"] button,
+    form[data-testid="stForm"] button,
+    .main form button {
+        background: linear-gradient(165deg, #1e3a5f 0%, #2c5282 100%) !important;
+        background-color: #1e3a5f !important;
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
+        border: none !important;
+        border-radius: 10px !important;
         font-weight: 600 !important;
-        color: #1e3a5f !important;
-        -webkit-text-fill-color: #1e3a5f !important;
+        letter-spacing: 0.02em !important;
+        box-shadow: 0 2px 12px rgba(30, 58, 95, 0.35) !important;
     }
     .main form .stButton > button *,
     .main form .stButton [data-testid="stMarkdown"],
     .main form .stButton [data-testid="stMarkdown"] *,
-    .main form .stButton button p,
-    .main form .stButton button span,
-    .main form .stButton button div {
-        color: #1e3a5f !important;
-        -webkit-text-fill-color: #1e3a5f !important;
+    section[data-testid="stForm"] .stButton > button *,
+    section[data-testid="stForm"] button *,
+    [data-testid="stForm"] button *,
+    .main form button * {
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
     }
-    .main form .stButton > button:hover {
-        background-color: #e8eef4 !important;
-        border-color: #1e3a5f !important;
-        color: #1e3a5f !important;
-        -webkit-text-fill-color: #1e3a5f !important;
+    .main form .stButton > button:hover,
+    section[data-testid="stForm"] .stButton > button:hover,
+    section[data-testid="stForm"] button:hover,
+    .main form button:hover {
+        background: linear-gradient(165deg, #2c5282 0%, #2d3748 100%) !important;
+        background-color: #2c5282 !important;
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
+        box-shadow: 0 4px 16px rgba(30, 58, 95, 0.45) !important;
     }
     .main form .stButton > button:hover *,
-    .main form .stButton > button:hover [data-testid="stMarkdown"],
-    .main form .stButton > button:hover [data-testid="stMarkdown"] * {
-        color: #1e3a5f !important;
-        -webkit-text-fill-color: #1e3a5f !important;
+    section[data-testid="stForm"] .stButton > button:hover *,
+    section[data-testid="stForm"] button:hover *,
+    .main form button:hover * {
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
     }
     @media (max-width: 640px) {
         .stButton > button { min-height: 44px !important; padding: 0.6rem 1rem !important; width: 100% !important; }
     }
     
-    /* 검색 쿼리 입력창: 원래 색상 유지, 반응형·실시간 입력만 */
-    [data-testid="stTextInput"] input {
+    /* 검색 쿼리 입력창: 흰 배경 + 파란 글자 (라이트/다크 공통) */
+    [data-testid="stTextInput"] input,
+    .stTextInput input {
+        background: #ffffff !important;
+        background-color: #ffffff !important;
+        color: #1e3a5f !important;
+        -webkit-text-fill-color: #1e3a5f !important;
+        border: 1px solid rgba(30, 58, 95, 0.35) !important;
         font-size: 1rem !important;
         padding: 0.65rem 0.9rem !important;
         min-height: 48px !important;
         transition: border-color 0.2s, box-shadow 0.2s !important;
     }
+    [data-testid="stTextInput"] input::placeholder,
+    .stTextInput input::placeholder {
+        color: #4a6fa5 !important;
+        opacity: 0.85 !important;
+    }
+    [data-theme="dark"] [data-testid="stTextInput"] input,
+    [data-theme="dark"] .stTextInput input {
+        background: #ffffff !important;
+        background-color: #ffffff !important;
+        color: #1e3a5f !important;
+        -webkit-text-fill-color: #1e3a5f !important;
+        border: 1px solid rgba(30, 58, 95, 0.35) !important;
+    }
+    [data-theme="dark"] [data-testid="stTextInput"] input::placeholder,
+    [data-theme="dark"] .stTextInput input::placeholder {
+        color: #4a6fa5 !important;
+        -webkit-text-fill-color: #4a6fa5 !important;
+    }
     @media (max-width: 640px) {
-        [data-testid="stTextInput"] input { min-height: 44px !important; padding: 0.6rem 0.8rem !important; font-size: 16px !important; }
+        [data-testid="stTextInput"] input, .stTextInput input { min-height: 44px !important; padding: 0.6rem 0.8rem !important; font-size: 16px !important; }
         .main .block-container { padding-left: 1rem !important; padding-right: 1rem !important; }
     }
     
@@ -215,6 +394,20 @@ st.markdown("""
         background-color: #e8eef4 !important;
         border-color: #1e3a5f !important;
     }
+    /* 인쇄 시 보고서 영역만 출력 (화면 그대로 PDF 저장용) */
+    @media print {
+        body * { visibility: hidden; }
+        #report-for-pdf, #report-for-pdf * { visibility: visible; }
+        #report-for-pdf {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            padding: 1rem !important;
+            box-shadow: none !important;
+            border: none !important;
+        }
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -232,70 +425,156 @@ if default_few_shot_path.exists():
         pass
 
 # 헤더
-st.markdown("## 의미 기반 검색과 생성형 AI를 활용한 산학 매칭 추천 시스템: AI가 만드는 산학 매칭 추천 보고서")
-st.caption("인천대학교 데이터사이언스 연구실")
+st.markdown("## 의미 기반 검색과 생성형 AI를 활용한 산학 매칭 추천 시스템")
+st.caption("인천대학교 데이터사이언스 연구실 · AI 기반 산학 매칭 추천 보고서")
 st.markdown("---")
 
-# 검색 섹션: 트렌디·신뢰감 있는 문구와 뱃지
+# 검색 섹션
 st.markdown(
-    "<p style='font-size: 0.75rem; color: #5a6c7d; margin-bottom: 0.25rem;'>RAG · AHP · 생성형 AI 기반</p>",
+    "<p style='font-size: 0.8rem; color: #1e3a5f; margin-bottom: 0.35rem; letter-spacing: 0.02em;'>RAG · AHP · 생성형 AI</p>",
     unsafe_allow_html=True
 )
 st.markdown("### 한 번의 검색으로 AI 추천 보고서까지")
 st.markdown(
     "검색어만 입력하면 **의미 기반 RAG 검색**으로 특허·논문·연구과제를 찾고, "
-    "**AHP 랭킹**과 **생성형 AI**가 산학 매칭 추천 보고서를 자동으로 만들어 드립니다. "
-    "데이터 기반의 신뢰할 수 있는 매칭 결과를 제공합니다."
+    "**생성형 AI**가 산학 매칭 추천 보고서를 자동으로 만들어 드립니다."
 )
 
 # 폼 사용: 입력 중에는 스크립트 재실행 없음 → 반응성 개선. 제출 시에만 실행.
 with st.form("search_form", clear_on_submit=False):
     query = st.text_input(
-        "검색 쿼리",
-        placeholder="예: 딥러닝 의료영상 분석 기술 연구를 찾고 있어요",
+        "검색",
+        placeholder="예:  3D 스캐너를 활용한 기술 연구를 수행한 교수님을 찾고 있어요",
         help="산학협력 매칭을 위한 검색 쿼리를 입력하세요. 구체적인 기술·분야 키워드를 넣으면 더 좋은 결과가 나옵니다.",
         key="query_input",
+        label_visibility="collapsed",
     )
     st.caption(
-        "**검색 팁** · 구체적인 **기술·분야 키워드**(예: 딥러닝, 의료영상, 배터리, 감성분석)를 포함하면 매칭 정확도가 올라갑니다. "
+        "**💡 검색 팁** · 구체적인 **기술·분야 키워드**(예: 의료영상, 배터리 소재, 에이전트 개발)를 포함하면 매칭 정확도가 올라갑니다. "
         "· 하고 싶은 **기술 개발·연구 주제**를 문장으로 써도 됩니다(예: \"전기차 배터리 충전 시간 단축 기술\"). "
-        "· 너무 짧은 단어 하나만 쓰기보다는 **2~5개 키워드** 또는 **한 문장**으로 입력하는 것을 권장합니다."
+        "· 단어 하나만 쓰기보다는 **2~5개 키워드** 또는 **한 문장**으로 입력하는 것을 권장합니다."
     )
     col_btn, col_spacer = st.columns([1, 3])
     with col_btn:
-        submitted = st.form_submit_button("🚀 검색 & 리포트 생성")
-# 버튼 스타일 JS 강제 (밝은 배경 + 진한 글자) — DOM에서 직접 적용
-_btn_style_js = """
-<script>
-(function applyBtnStyle() {
-  try {
-    var doc = window.parent.document;
-    var selectors = ['section[data-testid="stForm"] .stButton button', 'form .stButton button', '.main form .stButton button'];
-    var btn = null;
-    for (var i = 0; i < selectors.length; i++) {
-      btn = doc.querySelector(selectors[i]);
-      if (btn) break;
+        submitted = st.form_submit_button("🚀 검색 & 리포트 생성", type="primary")
+def _run_pipeline(q: str, docs: list, key: str, few_shot, progress_bar, status_text):
+    """파이프라인 실행 + 진행률 표시. 성공 시 session_state 설정, 실패 시 예외 발생."""
+    tracker = get_cost_tracker()
+    with st.spinner("준비 중..."):
+        embedder = get_embedder()
+        vector_store = get_vector_store()
+        retriever = get_retriever(embedder, vector_store, tuple(docs))
+    progress_bar.progress(10)
+
+    generator = ReportGenerator(api_key=key)
+    tracker.start_task("full_pipeline", description=q[:40])
+
+    status_text.text("📂 문서 검색 중...")
+    progress_bar.progress(20)
+    raw_rag_results = retriever.retrieve(
+        query=q,
+        retrieval_top_k=RETRIEVAL_TOP_K,
+        similarity_threshold=SIMILARITY_THRESHOLD,
+        mode="hybrid"
+    )
+    rag_results = generator._convert_rag_results(raw_rag_results)
+    progress_bar.progress(35)
+
+    status_text.text("👤 연구자 추천 중...")
+    progress_bar.progress(45)
+    aggregator = ProfessorAggregator()
+    professor_data = aggregator.aggregate_by_professor(rag_results=rag_results, doc_types=docs)
+    ranker = ProfessorRanker()
+    ranked_professors = ranker.rank_professors(professor_data, DEFAULT_TYPE_WEIGHTS)
+    run_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    ahp_results = {
+        "query": q,
+        "keywords": rag_results.get("keywords", {}),
+        "timestamp": run_ts,
+        "total_professors": len(ranked_professors),
+        "type_weights": DEFAULT_TYPE_WEIGHTS,
+        "ranked_professors": ranked_professors,
     }
-    if (btn) {
-      btn.style.setProperty('background-color', '#ffffff', 'important');
-      btn.style.setProperty('color', '#1e3a5f', 'important');
-      btn.style.setProperty('-webkit-text-fill-color', '#1e3a5f', 'important');
-      btn.style.setProperty('border', '2px solid #1e3a5f', 'important');
-      btn.style.setProperty('font-weight', '600', 'important');
-      var nodes = btn.querySelectorAll('*');
-      for (var j = 0; j < nodes.length; j++) {
-        nodes[j].style.setProperty('color', '#1e3a5f', 'important');
-        nodes[j].style.setProperty('-webkit-text-fill-color', '#1e3a5f', 'important');
-      }
-    }
-  } catch (e) {}
-}
-applyBtnStyle();
-setTimeout(applyBtnStyle, 200);
-setTimeout(applyBtnStyle, 1000);
-</script>
-"""
-components.html(_btn_style_js, height=0)
+    progress_bar.progress(60)
+
+    status_text.text("📄 보고서 생성 중...")
+    progress_bar.progress(70)
+    report_data = generator.generate_report(
+        ahp_results=ahp_results,
+        rag_results=rag_results,
+        few_shot_examples=few_shot
+    )
+    report_data["timestamp"] = run_ts
+    report_data["rag_results"] = rag_results
+    report_data["ahp_results"] = ahp_results
+    cost_result = tracker.end_task()
+    if cost_result:
+        report_data["api_cost"] = cost_result
+    progress_bar.progress(85)
+
+    base = Path("results/runs")
+    (base / "rag").mkdir(parents=True, exist_ok=True)
+    (base / "ahp").mkdir(parents=True, exist_ok=True)
+    (base / "report").mkdir(parents=True, exist_ok=True)
+    rag_path = base / "rag" / f"rag_{run_ts}.json"
+    ahp_path = base / "ahp" / f"ahp_results_{run_ts}.json"
+    with open(rag_path, "w", encoding="utf-8") as f:
+        json.dump(rag_results, f, ensure_ascii=False, indent=2)
+    with open(ahp_path, "w", encoding="utf-8") as f:
+        json.dump(ahp_results, f, ensure_ascii=False, indent=2)
+
+    status_text.text("보고서 마무리 중...")
+    progress_bar.progress(92)
+    if markdown is not None:
+        report_data["report_html"] = markdown.markdown(
+            report_data.get("report_text", ""),
+            extensions=["extra", "nl2br"]
+        )
+    save_result = generator.save_pdf(report_data)
+    if isinstance(save_result, tuple):
+        pdf_path, pdf_via_playwright = save_result
+    else:
+        pdf_path, pdf_via_playwright = save_result, True
+
+    progress_bar.progress(100)
+    status_text.text("완료!")
+
+    st.session_state["report_data"] = report_data
+    st.session_state["report_pdf_path"] = str(pdf_path) if (pdf_path and pdf_path.exists()) else None
+    st.session_state["report_pdf_via_playwright"] = pdf_via_playwright
+    st.session_state["report_rag_path_name"] = rag_path.name
+    st.session_state["report_ahp_path_name"] = ahp_path.name
+
+
+def _open_pipeline_modal(q: str, docs: list, key: str, few_shot):
+    """모달(팝업)로 로딩 표시. Streamlit 1.33+ 필요."""
+    # 닫기 클릭 시 다이얼로그만 fragment rerun됨 → _run_pipeline이 다시 호출되는 것 방지
+    already_done = (
+        "report_data" in st.session_state
+        and st.session_state.get("report_data", {}).get("query") == q
+    )
+    if already_done:
+        st.success("✅ 리포트 생성이 완료되었습니다.")
+        if st.button("닫기", type="primary"):
+            st.session_state.pop("_pipeline_modal_opened", None)
+            st.rerun()
+        return
+
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    try:
+        _run_pipeline(q, docs, key, few_shot, progress_bar, status_text)
+        st.success("✅ 리포트 생성이 완료되었습니다.")
+        if st.button("닫기", type="primary"):
+            st.session_state.pop("_pipeline_modal_opened", None)
+            st.rerun()
+    except Exception as e:
+        st.error(f"❌ 오류 발생: {str(e)}")
+        st.exception(e)
+        if st.button("닫기"):
+            st.session_state.pop("_pipeline_modal_opened", None)
+            st.rerun()
+
 
 if submitted:
     if not api_key:
@@ -303,138 +582,138 @@ if submitted:
     elif not query:
         st.warning("⚠️ 검색 쿼리를 입력해주세요.")
     else:
-        # 진행 상황 표시
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-
-        try:
-            # 캐시된 리소스 가져오기 (최초 1회만 실제 로드)
-            with st.spinner("임베딩 모델 및 벡터 저장소 로드 중... (최초 실행 시에만 시간이 소요됩니다)"):
-                embedder = get_embedder()
-                vector_store = get_vector_store()
-                retriever = get_retriever(embedder, vector_store, tuple(doc_types))
-
-            progress_bar.progress(10)
-
-            status_text.text("ReportGenerator 초기화 중...")
-            progress_bar.progress(20)
-
-            generator = ReportGenerator(api_key=api_key)
-
-            status_text.text("RAG 검색 수행 중...")
-            progress_bar.progress(30)
-
-            # 전체 파이프라인 실행 (캐시된 retriever 사용)
-            report_data = generator.generate_report_from_query(
-                query=query,
-                doc_types=doc_types,
-                few_shot_examples=few_shot_examples,
-                retriever=retriever
+        if hasattr(st, "dialog"):
+            # 닫기 후 rerun 시 같은 쿼리면 모달/파이프라인 재실행 안 함. 새 쿼리 제출 시에만 모달 열기.
+            report_for_same_query = (
+                "report_data" in st.session_state
+                and st.session_state.get("report_data", {}).get("query") == query
             )
+            if not report_for_same_query and not st.session_state.get("_pipeline_modal_opened"):
+                st.session_state["_pipeline_modal_opened"] = True
+                @st.dialog("리포트 생성 중", width="small", dismissible=False)
+                def run_pipeline_modal(q: str, docs: list, key: str, few_shot):
+                    _open_pipeline_modal(q, docs, key, few_shot)
+                run_pipeline_modal(query, doc_types, api_key, few_shot_examples)
+        else:
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            try:
+                _run_pipeline(query, doc_types, api_key, few_shot_examples, progress_bar, status_text)
+            except Exception as e:
+                st.error(f"❌ 오류 발생: {str(e)}")
+                st.exception(e)
+            finally:
+                progress_bar.empty()
+                status_text.empty()
 
-            progress_bar.progress(70)
-            status_text.text("RAG·AHP·REPORT 결과 로그 저장 중...")
+# 보고서 표시: 방금 생성했거나, PDF 다운로드 등 버튼 클릭 후 재실행 시에도 유지
+if "report_data" in st.session_state:
+    report_data = st.session_state["report_data"]
+    pdf_path_str = st.session_state.get("report_pdf_path")
+    pdf_path = Path(pdf_path_str) if pdf_path_str and Path(pdf_path_str).exists() else None
+    cost_result = report_data.get("api_cost")
 
-            # results/runs 하위에 RAG, AHP, REPORT 각각 로그로 저장 (동일 타임스탬프)
-            ts = report_data.get("timestamp", datetime.now().strftime("%Y%m%d_%H%M%S"))
-            base = Path("results/runs")
-            (base / "rag").mkdir(parents=True, exist_ok=True)
-            (base / "ahp").mkdir(parents=True, exist_ok=True)
-            (base / "report").mkdir(parents=True, exist_ok=True)
-            rag_path = base / "rag" / f"rag_{ts}.json"
-            ahp_path = base / "ahp" / f"ahp_results_{ts}.json"
-            with open(rag_path, "w", encoding="utf-8") as f:
-                json.dump(report_data.get("rag_results", {}), f, ensure_ascii=False, indent=2)
-            with open(ahp_path, "w", encoding="utf-8") as f:
-                json.dump(report_data.get("ahp_results", {}), f, ensure_ascii=False, indent=2)
+    st.success("✅ 리포트 생성 완료!")
+    if not pdf_path:
+        st.warning("PDF 저장 실패. 터미널에서 한 번만 실행: **playwright install chromium**")
 
-            progress_bar.progress(90)
-            status_text.text("PDF 저장 중...")
+    st.markdown("---")
+    st.markdown("### 📄 생성된 보고서")
+    st.caption("검색 질의 기반 추천 교수 및 관련 문서 요약")
 
-            pdf_path = generator.save_pdf(report_data)
+    report_text = report_data.get("report_text", "")
+    if markdown is not None:
+        report_html = markdown.markdown(report_text, extensions=["extra", "nl2br"])
+        wrapped = f'<div id="report-for-pdf" class="report-content-box">{report_html}</div>'
+        st.markdown(wrapped, unsafe_allow_html=True)
+    else:
+        st.markdown(report_text)
 
-            progress_bar.progress(100)
-            status_text.text("완료!")
+    with st.expander("📋 원본 텍스트 보기"):
+        st.text_area("리포트 원본", value=report_text, height=320, disabled=True, label_visibility="collapsed")
 
-            cost_result = report_data.get("api_cost")
-            st.success(f"✅ 리포트 생성 완료!")
-            st.info(
-                f"**저장된 로그** · RAG: `{rag_path}` · AHP: `{ahp_path}` · "
-                + (f"PDF: `{pdf_path}`" if pdf_path and pdf_path.exists() else "PDF: 저장 실패")
-            )
-            if not (pdf_path and pdf_path.exists()):
-                st.warning("PDF 저장 실패. pip install fpdf2 확인 후 다시 시도하세요.")
-            if cost_result and cost_result.get('total_cost_usd', 0) > 0:
-                st.caption(f"API 비용: ${cost_result['total_cost_usd']:.6f}")
+    with st.expander("🔍 입력 데이터 (디버깅)"):
+        st.json(report_data.get("input_data", {}))
 
-            st.markdown("---")
-            st.markdown("### 📄 생성된 보고서")
+    if cost_result and cost_result.get("total_cost_usd", 0) > 0:
+        st.markdown("---")
+        st.markdown("**💰 보고서 생성 비용**")
+        st.markdown(
+            f"<p style='font-size: 1.25rem; font-weight: 600; color: #1e3a5f; margin: 0.25rem 0 1rem 0;'>${cost_result['total_cost_usd']:.6f} USD</p>",
+            unsafe_allow_html=True
+        )
 
-            report_text = report_data.get("report_text", "")
-            st.markdown(report_text)
-
-            with st.expander("📋 원본 텍스트 보기"):
-                st.text_area("리포트 원본", value=report_text, height=320, disabled=True, label_visibility="collapsed")
-
-            with st.expander("🔍 입력 데이터 (디버깅)"):
-                st.json(report_data.get("input_data", {}))
-
-            st.markdown("---")
-            st.markdown("**PDF 다운로드**")
-            if pdf_path and pdf_path.exists():
-                st.download_button(
-                    label="📥 PDF 다운로드",
-                    data=pdf_path.read_bytes(),
-                    file_name=pdf_path.name,
-                    mime="application/pdf",
-                    key="query_pdf_download"
-                )
-            else:
-                st.caption("PDF를 생성하려면: pip install markdown weasyprint")
-                st.caption("또는 브라우저에서 인쇄(Ctrl+P) → PDF로 저장")
-
-        except Exception as e:
-            st.error(f"❌ 오류 발생: {str(e)}")
-            st.exception(e)
-        finally:
-            progress_bar.empty()
-            status_text.empty()
+    st.markdown("---")
+    st.markdown("**PDF 다운로드**")
+    st.caption("위 보고서 화면(HTML)을 그대로 PDF로 변환하여 다운로드합니다.")
+    if pdf_path:
+        st.download_button(
+            label="📥 PDF 다운로드",
+            data=pdf_path.read_bytes(),
+            file_name=pdf_path.name,
+            mime="application/pdf",
+            key="query_pdf_download"
+        )
+    else:
+        st.caption("PDF 생성 실패. 터미널에서 `playwright install chromium` 실행 후 다시 검색해 주세요.")
 
 
-# 페이지 맨 끝: 검색 버튼 스타일 강제 적용 (Streamlit DOM 구조 대응)
+# 페이지 맨 끝: 검색 & 리포트 생성 버튼 (최종 우선 적용)
 st.markdown("""
 <style>
-    /* 폼 내 첫 번째 버튼 = 검색 & 리포트 생성 (여러 선택자로 확실히 적용) */
+    /* 폼 내 유일한 버튼 = 검색 & 리포트 생성 (우선순위 극대화) */
+    body section[data-testid="stForm"] button,
+    body .main section[data-testid="stForm"] button,
+    body section[data-testid="stForm"] .stButton > button,
     section[data-testid="stForm"] .stButton > button,
+    section[data-testid="stForm"] button,
     [data-testid="stForm"] .stButton > button,
-    form .stButton > button,
-    .main section .stButton > button,
-    .main form .stButton > button {
-        background-color: #ffffff !important;
-        background: #ffffff !important;
-        border: 2px solid #1e3a5f !important;
-        color: #1e3a5f !important;
-        -webkit-text-fill-color: #1e3a5f !important;
+    [data-testid="stForm"] button,
+    .main form .stButton > button,
+    .main form button {
+        background: linear-gradient(165deg, #1e3a5f 0%, #2c5282 100%) !important;
+        background-color: #1e3a5f !important;
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
+        border: none !important;
+        border-radius: 10px !important;
         font-weight: 600 !important;
+        letter-spacing: 0.02em !important;
+        box-shadow: 0 2px 12px rgba(30, 58, 95, 0.35) !important;
     }
+    body section[data-testid="stForm"] button *,
     section[data-testid="stForm"] .stButton > button *,
-    [data-testid="stForm"] .stButton > button *,
-    form .stButton > button *,
+    section[data-testid="stForm"] button *,
+    [data-testid="stForm"] button *,
     .main form .stButton > button *,
-    .main form .stButton button p,
-    .main form .stButton button span,
-    .main form .stButton button div,
-    .main form .stButton [data-testid="stMarkdown"],
-    .main form .stButton [data-testid="stMarkdown"] * {
-        color: #1e3a5f !important;
-        -webkit-text-fill-color: #1e3a5f !important;
+    .main form button * {
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
+    }
+    body section[data-testid="stForm"] button:hover,
+    section[data-testid="stForm"] .stButton > button:hover,
+    section[data-testid="stForm"] button:hover,
+    .main form .stButton > button:hover,
+    .main form button:hover {
+        background: linear-gradient(165deg, #2c5282 0%, #2d3748 100%) !important;
+        background-color: #2c5282 !important;
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
+        box-shadow: 0 4px 16px rgba(30, 58, 95, 0.45) !important;
+    }
+    body section[data-testid="stForm"] button:hover *,
+    section[data-testid="stForm"] .stButton > button:hover *,
+    section[data-testid="stForm"] button:hover *,
+    .main form button:hover * {
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# 푸터 (인디고/RISE 스타일 참고)
+# 푸터
 st.markdown("---")
 st.markdown(
-    "<p style='text-align: center; color: #5a6c7d; font-size: 0.8rem; padding: 1rem 0; border-top: 1px solid rgba(203,213,224,0.8); margin-top: 1.5rem;'>INU 산학매칭지원 · 산학 매칭 추천 리포트 | INU LLM RAG Matching Engine</p>",
+    "<p style='text-align: center; color: #1e3a5f; font-size: 0.8rem; padding: 1.25rem 0; border-top: 1px solid rgba(30,58,95,0.2); margin-top: 1.5rem; letter-spacing: 0.02em;'>Incheon National University · Data Science for Intelligent System Lab</p>",
     unsafe_allow_html=True
 )

@@ -149,9 +149,12 @@ def main():
         print(f"  ✓ JSON 저장: {json_path}")
     
     if args.output_format in ["pdf", "all"]:
-        pdf_path = report_gen.save_pdf(report_data)
-        saved_files.append(pdf_path)
-        print(f"  ✓ PDF 저장: {pdf_path}")
+        pdf_path, ok = report_gen.save_pdf(report_data)
+        if pdf_path:
+            saved_files.append(pdf_path)
+            print(f"  ✓ PDF 저장: {pdf_path}")
+        else:
+            print("  ✗ PDF 저장 실패 (playwright install chromium 필요)")
     
     if args.output_format in ["html", "all"]:
         html_path = report_gen.save_html(report_data)

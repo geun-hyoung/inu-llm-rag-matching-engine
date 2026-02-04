@@ -35,11 +35,14 @@ chromadb>=1.4.0
 # Loading Bar
 tqdm>=4.67.1
 
-# hugging face
-huggingface_hub==0.36.0
+# hugging face (transformers 호환: >=1.3.0,<2.0)
+huggingface_hub>=1.3.0,<2.0
 
 # Streamlit
 streamlit>=1.28.0
 
 # Report PDF export (fpdf2만 사용, Windows에서 GTK 불필요)
 fpdf2>=2.7.0
+
+# Markdown → HTML (보고서 화면 표시용)
+markdown>=3.5.0

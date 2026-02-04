@@ -592,7 +592,7 @@ class HybridRetriever:
             response = self.llm_client.chat.completions.create(
                 model=self.llm_model,
                 messages=[{"role": "user", "content": full_prompt}],
-                temperature=0.3,
+                temperature=0.0,
                 max_tokens=1000
             )
 

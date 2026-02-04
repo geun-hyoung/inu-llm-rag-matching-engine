@@ -100,7 +100,8 @@ def parse_year_from_project(project: Dict) -> Any:
 def filter_project_data(projects: List[Dict]) -> tuple:
     """
     프로젝트 데이터에서 필요한 컬럼만 추출하고 한국어 컬럼명을 영어로 변경합니다.
-    텍스트 전처리(수식/기호 제거, 100자 이상 5000자 이하 필터링)를 적용합니다.
+    - 연도 필터: 2015년 이상 데이터만 유지 (excel_기준년도 또는 RCH_ST_DT 기준).
+    - 텍스트 전처리(수식/기호 제거, 100자 이상 5000자 이하 필터링)를 적용합니다.
     
     Args:
         projects: 프로젝트 데이터 리스트
@@ -114,6 +115,7 @@ def filter_project_data(projects: List[Dict]) -> tuple:
     filtered_projects = []
     filter_stats = {
         'total': len(projects),
+        'year_filtered': 0,  # 2015년 미만으로 제외된 개수
         'text_preprocessing_passed': 0,
         'text_preprocessing_failed': 0
     }
@@ -121,6 +123,12 @@ def filter_project_data(projects: List[Dict]) -> tuple:
     for idx, project in enumerate(projects, 1):
         if idx % 1000 == 0:
             print(f"   - 처리 중: {idx:,}/{len(projects):,}개")
+        
+        # 연도 추출 (2015년 이상만 유지)
+        year = parse_year_from_project(project)
+        if year is None or year < 2015:
+            filter_stats['year_filtered'] += 1
+            continue
         
         # summary 필드 생성: excel_연구목표요약과 excel_연구내용요약 합치기
         objective = project.get('excel_연구목표요약', '')
@@ -147,9 +155,6 @@ def filter_project_data(projects: List[Dict]) -> tuple:
             continue  # 최소 길이 조건을 만족하지 않으면 제외
         
         filter_stats['text_preprocessing_passed'] += 1
-        
-        # 연도 추출
-        year = parse_year_from_project(project)
         
         # 공통 컬럼 구조로 데이터 생성
         filtered_project = {
@@ -257,11 +262,18 @@ def main():
     professor_matched = len([p for p in filtered_projects if p.get("professor_info")])
     print(f"3. 교수 정보가 있는 프로젝트 수: {professor_matched:,}개")
     
+    # 연도 필터 통계
+    print(f"\n[연도 필터 통계] (2015년 이상만 유지)")
+    print(f"  - 연도 미충족 제외 (2015년 미만 또는 연도 없음): {filter_stats['year_filtered']:,}개")
+    
     # 텍스트 전처리 통계
     print(f"\n[텍스트 전처리 통계]")
     print(f"  - 전처리 통과 (100자 이상 5000자 이하): {filter_stats['text_preprocessing_passed']:,}개")
     print(f"  - 전처리 실패 (100자 미만 또는 5000자 초과): {filter_stats['text_preprocessing_failed']:,}개")
-    print(f"  - 필터링률: {filter_stats['text_preprocessing_failed'] / filter_stats['total'] * 100:.1f}%")
+    total_filtered = filter_stats['year_filtered'] + filter_stats['text_preprocessing_failed']
+    print(f"  - 전체 제외: {total_filtered:,}개 (연도 {filter_stats['year_filtered']:,} + 전처리 실패 {filter_stats['text_preprocessing_failed']:,})")
+    if filter_stats['total'] > 0:
+        print(f"  - 필터링률: {total_filtered / filter_stats['total'] * 100:.1f}%")
     
     # 컬럼 정보 출력
     if filtered_projects:

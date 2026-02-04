@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 import sys
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Optional
 from collections import Counter, defaultdict
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -43,6 +43,30 @@ def load_article_data(file_path: str) -> List[Dict]:
     except json.JSONDecodeError as e:
         print(f"[오류] JSON 파싱 오류: {e}")
         return []
+
+
+def get_year_from_article(item: Dict) -> Optional[str]:
+    """
+    논문 레코드에서 연도를 추출합니다.
+    필터링된 데이터는 표준화된 'year' 필드(정수/문자열), 원본 데이터는 'YY' 필드를 사용합니다.
+    
+    Returns:
+        4자리 연도 문자열 (예: "2015") 또는 유효하지 않으면 None
+    """
+    # 필터링된 데이터: 표준화된 year 필드 (정수 또는 문자열)
+    year_val = item.get("year")
+    if year_val is not None:
+        if isinstance(year_val, int) and 1900 <= year_val <= 2100:
+            return str(year_val)
+        if isinstance(year_val, str) and len(year_val) >= 4 and year_val[:4].isdigit():
+            return year_val[:4]
+    
+    # 원본 데이터: YY 필드
+    yy = item.get("YY", "")
+    if yy and isinstance(yy, str) and len(yy) >= 4 and yy[:4].isdigit():
+        return yy[:4]
+    
+    return None
 
 
 def analyze_basic_info(data: List[Dict]) -> Dict[str, Any]:
@@ -136,16 +160,20 @@ def analyze_article_type_by_professor(data: List[Dict]) -> Dict[str, Any]:
     
     for item in data:
         prof_info = item.get("professor_info", {})
-        participation = item.get("THSS_PATICP_GBN", "")
-        journal = item.get("JRNL_GBN", "")
+        # 필터링된 데이터는 metadata 안에 있음, 원본은 최상위 필드
+        metadata = item.get("metadata", {})
+        participation = (metadata.get("THSS_PATICP_GBN") if metadata else None) or item.get("THSS_PATICP_GBN", "")
+        journal = (metadata.get("JRNL_GBN") if metadata else None) or item.get("JRNL_GBN", "")
+        participation = participation.strip() if isinstance(participation, str) else str(participation or "")
+        journal = journal.strip() if isinstance(journal, str) else str(journal or "")
         
         # THSS_PATICP_GBN이 비어있는 경우도 카운트 (빈 값은 "(미분류)"로 표시)
-        if participation and participation.strip():
+        if participation:
             participation_type[participation] += 1
         else:
             participation_type["(미분류)"] += 1
         # JRNL_GBN이 비어있는 경우도 카운트 (빈 값은 "(미분류)"로 표시)
-        if journal and journal.strip():
+        if journal:
             journal_type[journal] += 1
         else:
             journal_type["(미분류)"] += 1
@@ -189,19 +217,19 @@ def analyze_article_timeline(data: List[Dict]) -> Dict[str, Any]:
     professor_years = defaultdict(set)
     
     for item in data:
-        year_str = item.get("YY", "")
+        # 필터링된 데이터는 'year', 원본은 'YY' 사용
+        year_str = get_year_from_article(item)
         prof_info = item.get("professor_info", {})
         
-        if not year_str or len(year_str) < 4:
+        if not year_str:
             continue
         
-        year = year_str[:4]
-        year_articles[year] += 1
+        year_articles[year_str] += 1
         
         prof_id = str(prof_info.get("SQ", "")) or str(prof_info.get("EMP_NO", "")) if prof_info else ""
         if prof_id:
-            year_professors[year].add(prof_id)
-            professor_years[prof_id].add(year)
+            year_professors[year_str].add(prof_id)
+            professor_years[prof_id].add(year_str)
     
     # 교수별 활동 기간 (발행 연도 범위)
     professor_activity_periods = {}
@@ -1052,18 +1080,14 @@ def main():
         print("[오류] 분석할 데이터가 없습니다.")
         return
     
-    # 2014년 데이터 제거 (전처리 단계)
+    # 2014년 이하 데이터 제거 (전처리 단계) — 2015년 이상만 유지, 연도 없으면 포함
     original_count = len(data)
     filtered_data = []
     for item in data:
-        yy = item.get("YY", "")
-        # YY 필드가 문자열이고 4자리 이상인 경우에만 연도 확인
-        if isinstance(yy, str) and len(yy) >= 4:
-            year = yy[:4]
-            if year != "2014":
-                filtered_data.append(item)
-        else:
-            # YY 필드가 없거나 형식이 맞지 않으면 포함
+        year_str = get_year_from_article(item)
+        if year_str is None:
+            filtered_data.append(item)  # 연도 없으면 포함
+        elif int(year_str) >= 2015:
             filtered_data.append(item)
     
     data = filtered_data

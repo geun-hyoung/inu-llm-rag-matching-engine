@@ -255,23 +255,23 @@ KEYWORD_EXTRACTION_PROMPT = """---Goal---
 단, "감성분석", "행동 분석"처럼 도메인 특화 복합어는 허용됩니다.
 
 ---Output---
-JSON 형식, low_level 1-5개, high_level 1-2개, 각각의 영어 번역 포함
+JSON 형식, low_level 1-5개, high_level 2-3개, 각각의 영어 번역 포함
 
 ---Examples---
-Query: "공장에서 용접 불량이 자꾸 발생하는데 자동으로 검출하고 싶어요"
-Output: {{"low_level_keywords": ["용접 불량", "자동 검출"], "low_level_keywords_en": ["welding defect", "automatic detection"], "high_level_keywords": ["용접 결함 자동 검출", "제조 품질 검사"], "high_level_keywords_en": ["automatic welding defect detection", "manufacturing quality inspection"]}}
-
 Query: "이상치 탐지 및 머신러닝 관련 연구를 찾고 있어요"
 Output: {{"low_level_keywords": ["이상치 탐지", "머신러닝"], "low_level_keywords_en": ["anomaly detection", "machine learning"], "high_level_keywords": ["머신러닝 기반 이상치 탐지", "데이터 기반 이상 패턴 분석"], "high_level_keywords_en": ["machine learning based anomaly detection", "data-driven anomaly pattern analysis"]}}
 
-Query: "전기차 배터리 충전 시간이 너무 오래 걸려서 단축하고 싶어요"
-Output: {{"low_level_keywords": ["전기차 배터리", "충전 시간"], "low_level_keywords_en": ["electric vehicle battery", "charging time"], "high_level_keywords": ["배터리 충전 효율 향상", "급속 충전 기술"], "high_level_keywords_en": ["battery charging efficiency improvement", "fast charging technology"]}}
+Query: "공장에서 용접 불량이 자꾸 발생하는데 자동으로 검출하고 싶어요"
+Output: {{"low_level_keywords": ["용접 불량", "자동 검출"], "low_level_keywords_en": ["welding defect", "automatic detection"], "high_level_keywords": ["용접 결함 자동 검출", "제조 품질 검사"], "high_level_keywords_en": ["automatic welding defect detection", "manufacturing quality inspection"]}}
 
 Query: "CT 영상에서 폐 결절을 자동으로 찾아내고 싶어요"
 Output: {{"low_level_keywords": ["CT 영상", "폐 결절"], "low_level_keywords_en": ["CT image", "pulmonary nodule"], "high_level_keywords": ["의료영상 기반 폐 결절 검출", "CAD 기반 진단"], "high_level_keywords_en": ["medical image based pulmonary nodule detection", "CAD-based diagnosis"]}}
 
 Query: "고객 리뷰를 감성분석 하려고 합니다"
 Output: {{"low_level_keywords": ["고객 리뷰", "감성분석"], "low_level_keywords_en": ["customer review", "sentiment analysis"], "high_level_keywords": ["텍스트 기반 감성 분석", "자연어처리 기반 리뷰 분석"], "high_level_keywords_en": ["text-based sentiment analysis", "NLP-based review analysis"]}}
+
+Query: "전기차 배터리 충전 시간이 너무 오래 걸려서 단축하고 싶어요"
+Output: {{"low_level_keywords": ["전기차 배터리", "충전 시간"], "low_level_keywords_en": ["electric vehicle battery", "charging time"], "high_level_keywords": ["배터리 충전 효율 향상", "급속 충전 기술"], "high_level_keywords_en": ["battery charging efficiency improvement", "fast charging technology"]}}
 
 Query: "스마트팜에 IoT 센서 적용해서 작물 생육 모니터링 하려는데요"
 Output: {{"low_level_keywords": ["스마트팜", "IoT 센서", "작물 생육 모니터링"], "low_level_keywords_en": ["smart farm", "IoT sensor", "crop growth monitoring"], "high_level_keywords": ["IoT 기반 생육 모니터링", "정밀 농업"], "high_level_keywords_en": ["IoT-based growth monitoring", "precision agriculture"]}}

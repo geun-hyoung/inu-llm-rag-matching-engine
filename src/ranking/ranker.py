@@ -107,7 +107,8 @@ class ProfessorRanker:
                     "score": doc_score,
                     "metadata": doc.get("metadata", {})
                 })
-            scores_by_type["patent"] = sum(patent_scores) / len(patent_scores) if patent_scores else 0.0
+            # 타입별 점수: 합계 (논문/특허/연구과제가 많을수록 총점이 높아지도록)
+            scores_by_type["patent"] = sum(patent_scores)
             
             # Article 점수 계산
             article_docs = prof_data["documents"].get("article", [])
@@ -121,7 +122,7 @@ class ProfessorRanker:
                     "score": doc_score,
                     "metadata": doc.get("metadata", {})
                 })
-            scores_by_type["article"] = sum(article_scores) / len(article_scores) if article_scores else 0.0
+            scores_by_type["article"] = sum(article_scores)
             
             # Project 점수 계산
             project_docs = prof_data["documents"].get("project", [])
@@ -135,7 +136,7 @@ class ProfessorRanker:
                     "score": doc_score,
                     "metadata": doc.get("metadata", {})
                 })
-            scores_by_type["project"] = sum(project_scores) / len(project_scores) if project_scores else 0.0
+            scores_by_type["project"] = sum(project_scores)
             
             # 종합 점수 계산
             total_score = (

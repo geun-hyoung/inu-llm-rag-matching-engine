@@ -63,6 +63,10 @@ logs/
 # Config files (민감한 정보 포함)
 config/database.py
 config/settings.py
+config/ahp_config.py
+
+# Cost / history
+cost_history.json
 
 # Jupyter Notebook
 .ipynb_checkpoints
