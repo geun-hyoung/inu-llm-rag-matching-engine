@@ -255,7 +255,8 @@ KEYWORD_EXTRACTION_PROMPT = """---Goal---
 단, "감성분석", "행동 분석"처럼 도메인 특화 복합어는 허용됩니다.
 
 ---Output---
-JSON 형식, low_level 1-5개, high_level 2-3개, 각각의 영어 번역 포함
+반드시 순수 JSON만 출력하세요. ```json 같은 마크다운 코드 블록으로 감싸지 마세요.
+low_level 1-5개, high_level 2-3개, 각각의 영어 번역 포함
 
 ---Examples---
 Query: "이상치 탐지 및 머신러닝 관련 연구를 찾고 있어요"

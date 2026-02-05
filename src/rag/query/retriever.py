@@ -3,6 +3,7 @@ HybridRetriever
 LightRAG 스타일 Hybrid 검색 (Local + Global)
 """
 
+import re
 import sys
 import json
 from pathlib import Path
@@ -96,6 +97,12 @@ class HybridRetriever:
             )
 
             content = response.choices[0].message.content.strip()
+
+            # GPT-4o-mini가 ```json ... ``` 으로 감싸는 경우 방어
+            if content.startswith("```"):
+                content = re.sub(r"^```(?:json)?\s*\n?", "", content)
+                content = re.sub(r"\n?```\s*$", "", content)
+                content = content.strip()
 
             # JSON 파싱
             result = json.loads(content)
