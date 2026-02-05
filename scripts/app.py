@@ -487,9 +487,14 @@ def _run_pipeline(q: str, docs: list, key: str, few_shot, progress_bar, status_t
     ranker = ProfessorRanker()
     ranked_professors = ranker.rank_professors(professor_data, DEFAULT_TYPE_WEIGHTS)
     run_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    from src.reporting.report_generator import normalize_keywords_if_duplicate_query
+    raw_kw = {
+        "high_level": raw_rag_results.get("high_level_keywords", []),
+        "low_level": raw_rag_results.get("low_level_keywords", []),
+    }
     ahp_results = {
         "query": q,
-        "keywords": rag_results.get("keywords", {}),
+        "keywords": normalize_keywords_if_duplicate_query(raw_kw, q),
         "timestamp": run_ts,
         "total_professors": len(ranked_professors),
         "type_weights": DEFAULT_TYPE_WEIGHTS,
@@ -548,15 +553,16 @@ def _run_pipeline(q: str, docs: list, key: str, few_shot, progress_bar, status_t
 
 def _open_pipeline_modal(q: str, docs: list, key: str, few_shot):
     """모달(팝업)로 로딩 표시. Streamlit 1.33+ 필요."""
-    # 닫기 클릭 시 다이얼로그만 fragment rerun됨 → _run_pipeline이 다시 호출되는 것 방지
     already_done = (
         "report_data" in st.session_state
         and st.session_state.get("report_data", {}).get("query") == q
     )
+    close_key = "pipeline_modal_close"
     if already_done:
         st.success("✅ 리포트 생성이 완료되었습니다.")
-        if st.button("닫기", type="primary"):
+        if st.button("닫기", type="primary", key=close_key):
             st.session_state.pop("_pipeline_modal_opened", None)
+            st.session_state["_modal_just_closed"] = True
             st.rerun()
         return
 
@@ -565,14 +571,16 @@ def _open_pipeline_modal(q: str, docs: list, key: str, few_shot):
     try:
         _run_pipeline(q, docs, key, few_shot, progress_bar, status_text)
         st.success("✅ 리포트 생성이 완료되었습니다.")
-        if st.button("닫기", type="primary"):
+        if st.button("닫기", type="primary", key=close_key):
             st.session_state.pop("_pipeline_modal_opened", None)
+            st.session_state["_modal_just_closed"] = True
             st.rerun()
     except Exception as e:
         st.error(f"❌ 오류 발생: {str(e)}")
         st.exception(e)
-        if st.button("닫기"):
+        if st.button("닫기", key=close_key):
             st.session_state.pop("_pipeline_modal_opened", None)
+            st.session_state["_modal_just_closed"] = True
             st.rerun()
 
 
@@ -583,17 +591,21 @@ if submitted:
         st.warning("⚠️ 검색 쿼리를 입력해주세요.")
     else:
         if hasattr(st, "dialog"):
-            # 닫기 후 rerun 시 같은 쿼리면 모달/파이프라인 재실행 안 함. 새 쿼리 제출 시에만 모달 열기.
+            # 닫기/바깥 클릭 후 재검색 시 모달 다시 열리도록, 열지 않을 땐 플래그 제거.
+            st.session_state.pop("_modal_just_closed", None)
             report_for_same_query = (
                 "report_data" in st.session_state
                 and st.session_state.get("report_data", {}).get("query") == query
             )
-            if not report_for_same_query and not st.session_state.get("_pipeline_modal_opened"):
+            modal_ok = not report_for_same_query and not st.session_state.get("_pipeline_modal_opened")
+            if modal_ok:
                 st.session_state["_pipeline_modal_opened"] = True
-                @st.dialog("리포트 생성 중", width="small", dismissible=False)
+                @st.dialog("리포트 생성 중", width="small", dismissible=True)
                 def run_pipeline_modal(q: str, docs: list, key: str, few_shot):
                     _open_pipeline_modal(q, docs, key, few_shot)
                 run_pipeline_modal(query, doc_types, api_key, few_shot_examples)
+            else:
+                st.session_state.pop("_pipeline_modal_opened", None)
         else:
             progress_bar = st.progress(0)
             status_text = st.empty()

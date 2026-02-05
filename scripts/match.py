@@ -13,7 +13,7 @@ from src.rag.query.retriever import HybridRetriever
 from src.ranking.professor_aggregator import ProfessorAggregator
 from src.ranking.ranker import ProfessorRanker
 from src.reporting.report_generator import ReportGenerator
-from config.settings import RETRIEVAL_TOP_K, FINAL_TOP_K
+from config.settings import RETRIEVAL_TOP_K, SIMILARITY_THRESHOLD
 
 
 def main():
@@ -43,7 +43,7 @@ def main():
         "--final-top-k",
         type=int,
         default=None,
-        help=f"최종 병합 후 반환할 문서 개수 (기본: {FINAL_TOP_K})"
+        help="(현재 미사용) 최종 병합 후 반환할 문서 개수"
     )
     parser.add_argument(
         "--top-n",
@@ -85,7 +85,7 @@ def main():
     rag_results = retriever.retrieve(
         query=args.query,
         retrieval_top_k=args.retrieval_top_k,
-        final_top_k=args.final_top_k,
+        similarity_threshold=SIMILARITY_THRESHOLD,
         mode="hybrid"
     )
     
@@ -124,9 +124,14 @@ def main():
     from config.ahp_config import DEFAULT_TYPE_WEIGHTS
     from datetime import datetime
     
+    from src.reporting.report_generator import normalize_keywords_if_duplicate_query
+    raw_kw = {
+        "high_level": rag_results.get("high_level_keywords", []),
+        "low_level": rag_results.get("low_level_keywords", []),
+    }
     ahp_results = {
         "query": args.query,
-        "keywords": rag_results.get("keywords", {}),
+        "keywords": normalize_keywords_if_duplicate_query(raw_kw, args.query),
         "timestamp": datetime.now().strftime("%Y%m%d_%H%M%S"),
         "total_professors": len(ranked_professors),
         "type_weights": DEFAULT_TYPE_WEIGHTS,

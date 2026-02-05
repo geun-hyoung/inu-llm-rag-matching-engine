@@ -25,6 +25,27 @@ def _escape_html(s: str) -> str:
     return _html.escape(s)
 
 
+def normalize_keywords_if_duplicate_query(keywords: Dict[str, Any], query: str) -> Dict[str, List[str]]:
+    """
+    retriever가 실패해 high_level/low_level 둘 다 [query]로 온 경우를 정규화.
+    저수준은 질의에서 토큰을 추출하고, 고수준은 질의 1개만 유지해 중복 표시를 막음.
+    """
+    high = list(keywords.get("high_level") or [])
+    low = list(keywords.get("low_level") or [])
+    if not query or (len(high) != 1 or len(low) != 1):
+        return {"high_level": high, "low_level": low}
+    if high[0] != query or low[0] != query:
+        return {"high_level": high, "low_level": low}
+
+    # 둘 다 [query] → 저수준만 질의에서 토큰 분리 (2글자 이상, 종결어 제외)
+    stop = {"찾고", "있어", "해요", "해주실", "있나요", "있어요", "싶어", "부탁", "드려요"}
+    tokens = [t.strip() for t in re.split(r"[\s,]+", query) if len(t.strip()) >= 2]
+    tokens = [t for t in tokens if t not in stop][:6]
+    if not tokens:
+        tokens = [query]
+    return {"high_level": [query], "low_level": tokens}
+
+
 class ReportGenerator:
     """산학 매칭 추천 보고서 생성 클래스"""
     
@@ -115,9 +136,13 @@ class ReportGenerator:
         
         # 4. AHP 결과 형식으로 변환 (한 번의 실행에서 RAG/AHP/REPORT 로그용 동일 타임스탬프 사용)
         run_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        raw_kw = {
+            "high_level": raw_rag_results.get("high_level_keywords", []),
+            "low_level": raw_rag_results.get("low_level_keywords", []),
+        }
         ahp_results = {
             "query": query,
-            "keywords": rag_results.get("keywords", {}),
+            "keywords": normalize_keywords_if_duplicate_query(raw_kw, query),
             "timestamp": run_ts,
             "total_professors": len(ranked_professors),
             "type_weights": DEFAULT_TYPE_WEIGHTS,
@@ -188,7 +213,10 @@ class ReportGenerator:
         )
 
         report_text = response.choices[0].message.content
-        
+
+        # 검색 개요(1차/2차 키워드)는 input_json 값으로 직접 치환 (LLM이 query만 반복하는 문제 방지)
+        report_text = self._inject_keyword_section(report_text, input_json)
+
         # 결과 구조화
         report_data = {
             "query": ahp_results.get("query", ""),
@@ -294,8 +322,9 @@ class ReportGenerator:
             리포트 생성용 입력 JSON
         """
         query = ahp_results.get("query", "")
-        keywords = ahp_results.get("keywords", {})
-
+        keywords = normalize_keywords_if_duplicate_query(
+            ahp_results.get("keywords", {}), query
+        )
         high_level_keywords = keywords.get("high_level", [])
         low_level_keywords = keywords.get("low_level", [])
 
@@ -351,7 +380,34 @@ class ReportGenerator:
         }
         
         return input_json
-    
+
+    def _inject_keyword_section(self, report_text: str, input_json: Dict[str, Any]) -> str:
+        """
+        보고서 본문의 '검색 개요' 섹션을 input_json의 실제 키워드 값으로 치환.
+        LLM이 query만 반복해 넣는 문제를 방지하기 위해 코드로 1차(저수준)/2차(고수준)를 채움.
+        """
+        keywords = input_json.get("keywords", {})
+        low_level = keywords.get("low_level", []) or []
+        high_level = keywords.get("high_level", []) or []
+        low_str = ", ".join(str(k).strip() for k in low_level) if low_level else "(없음)"
+        high_str = ", ".join(str(k).strip() for k in high_level) if high_level else "(없음)"
+
+        section_header = "### 🔍 사용자 검색어 (검색 개요)"
+        replacement_block = (
+            f"{section_header}\n\n"
+            f"- **1차 검색 키워드 (저수준):** {low_str}\n"
+            f"- **2차 검색 키워드 (고수준):** {high_str}"
+        )
+
+        # "### 🔍 사용자 검색어 (검색 개요)" 부터 다음 "###" 또는 "---" 직전까지를 치환
+        pattern = re.compile(
+            r"(### 🔍 사용자 검색어 \(검색 개요\))\s*\n.*?(?=\n### |\n---|\n# |\Z)",
+            re.DOTALL,
+        )
+        if pattern.search(report_text):
+            return pattern.sub(replacement_block + "\n", report_text, count=1)
+        return report_text
+
     def _build_prompt(
         self,
         input_json: Dict[str, Any],
@@ -376,7 +432,7 @@ class ReportGenerator:
 [지침]
 - 입력 JSON의 값만 사용하고, 추론·해석·평가 문장을 넣지 마세요.
 - **마크다운 활용**: 제목은 #(대제목), ##(섹션), ###(소제목)으로 계층을 나누고, **굵게**는 **키워드**처럼 반드시 사용하세요.
-- **강조**: "사용자 검색어", "1차 검색 키워드", "2차 검색 키워드", "소속", "이메일", "문서 유형", "제목", "연도" 등 라벨은 **굵게** 처리하세요.
+- **강조**: "사용자 검색어", "1차 검색 키워드 (저수준)", "2차 검색 키워드 (고수준)", "소속", "이메일", "문서 유형", "제목", "연도" 등 라벨은 **굵게** 처리하세요.
 - **이모티콘**: 섹션 구분을 위해 각 섹션 제목 앞에 이모티콘을 하나씩 넣으세요. 예: 📋 제목, 🔍 검색 개요, 👤 추천 교수, 📌 유의사항 및 문의
 - 교수는 반드시 "1. OOO 교수", "2. OOO 교수", "3. OOO 교수" 형식으로 번호와 함께 표기하세요.
 - AHP 점수·종합 점수는 보고서에 포함하지 마세요.
@@ -400,8 +456,8 @@ class ReportGenerator:
 
 ### 🔍 사용자 검색어 (검색 개요)
 
-- **1차 검색 키워드:** (keywords.high_level 배열을 쉼표로 나열)
-- **2차 검색 키워드:** (keywords.low_level 배열을 쉼표로 나열)
+- **1차 검색 키워드 (저수준):** (keywords.low_level 배열을 쉼표로 나열)
+- **2차 검색 키워드 (고수준):** (keywords.high_level 배열을 쉼표로 나열)
 
 ---
 
@@ -591,9 +647,9 @@ professors 배열을 순서대로 사용하세요. 각 교수 블록에서 **관
         def _year_span(match):
             return '<span class="doc-year">(' + match.group(1) + '):</span>' + chr(0x00A0)
         body_html = re.sub(r"\((\d{4})\):\s+", _year_span, body_html)
-        # 빈/줄바꿈만 있는 p 태그 제거 → 불필요한 줄간격 축소
-        body_html = re.sub(r"<p>\s*</p>", "", body_html, flags=re.IGNORECASE)
-        body_html = re.sub(r"<p>\s*<br\s*/?>\s*</p>", "", body_html, flags=re.IGNORECASE)
+        # 완전히 비어 있는 p만 제거 (공백만 있는 p는 줄바꿈으로 대체해 단락 간격 유지)
+        body_html = re.sub(r"<p>\s*</p>", "<br/>", body_html, flags=re.IGNORECASE)
+        body_html = re.sub(r"<p>\s*<br\s*/?>\s*</p>", "<br/>", body_html, flags=re.IGNORECASE)
 
         # PDF용 HTML: 잘림 방지(overflow 숨기지 않음), 줄간격·여백 축소, 표·리스트 줄바꿈 보장
         head = """<!DOCTYPE html>
@@ -608,8 +664,8 @@ professors 배열을 순서대로 사용하세요. 각 교수 블록에서 **관
   html { width: 100%; }
   body {
     font-family: "Malgun Gothic", "Segoe UI Emoji", "Apple Color Emoji", "Apple SD Gothic Neo", sans-serif;
-    font-size: 0.85rem !important;
-    line-height: 1.28 !important;
+    font-size: 0.95rem !important;
+    line-height: 1.5 !important;
     color: #1e3a5f;
     margin: 0 !important;
     padding: 0.4rem 0.6rem !important;
@@ -627,8 +683,8 @@ professors 배열을 순서대로 사용하세요. 각 교수 블록에서 **관
     padding: 0.5rem 0.6rem !important;
     border-radius: 6px;
     border: 1px solid rgba(30, 58, 95, 0.2);
-    font-size: 0.85rem !important;
-    line-height: 1.28 !important;
+    font-size: 0.95rem !important;
+    line-height: 1.5 !important;
     width: 100%;
     max-width: 100%;
     min-width: 0;
@@ -639,28 +695,28 @@ professors 배열을 순서대로 사용하세요. 각 교수 블록에서 **관
   }
   .report-content-box h1, .report-content-box h2, .report-content-box h3, .report-content-box h4,
   .report-content-box p, .report-content-box li, .report-content-box span,
-  .report-content-box td, .report-content-box strong { line-height: 1.28 !important; }
-  .report-content-box h1 { font-size: 1rem !important; margin: 0.4em 0 0.25em !important; color: #1e3a5f; font-weight: 700; }
-  .report-content-box h2 { font-size: 0.95rem !important; margin: 0.35em 0 0.2em !important; color: #1e3a5f; font-weight: 700; }
-  .report-content-box h3 { font-size: 0.9rem !important; margin: 0.3em 0 0.18em !important; color: #1e3a5f; font-weight: 700; }
-  .report-content-box h4 { font-size: 0.88rem !important; margin: 0.28em 0 0.15em !important; color: #1e3a5f; font-weight: 700; }
-  .report-content-box p { margin: 0.45em 0 !important; }
+  .report-content-box td, .report-content-box strong { line-height: 1.5 !important; }
+  .report-content-box h1 { font-size: 1.15rem !important; margin: 0.5em 0 0.35em !important; color: #1e3a5f; font-weight: 700; }
+  .report-content-box h2 { font-size: 1.08rem !important; margin: 0.5em 0 0.28em !important; color: #1e3a5f; font-weight: 700; }
+  .report-content-box h3 { font-size: 1.02rem !important; margin: 0.45em 0 0.22em !important; color: #1e3a5f; font-weight: 700; }
+  .report-content-box h4 { font-size: 0.98rem !important; margin: 0.4em 0 0.2em !important; color: #1e3a5f; font-weight: 700; }
+  .report-content-box p { margin: 0.6em 0 !important; line-height: 1.5 !important; }
   .report-content-box ul {
     list-style-type: circle;
     list-style-position: outside;
     padding-left: 1.35rem;
-    margin: 0.2rem 0 !important;
-    line-height: 1.28 !important;
+    margin: 0.4rem 0 !important;
+    line-height: 1.5 !important;
   }
   .report-content-box ul ul {
     list-style-type: disc;
     list-style-position: outside;
     padding-left: 1.5rem;
-    margin: 0.12rem 0 0.2rem 0 !important;
-    margin-top: 0 !important;
+    margin: 0.25rem 0 0.3rem 0 !important;
+    margin-top: 0.2rem !important;
   }
-  .report-content-box li { margin: 0.12rem 0 !important; padding-left: 0.25rem; word-break: keep-all; overflow-wrap: break-word; }
-  .report-content-box li li { margin: 0.1rem 0 !important; padding-left: 0.2rem; }
+  .report-content-box li { margin: 0.25rem 0 !important; padding-left: 0.25rem; word-break: keep-all; overflow-wrap: break-word; line-height: 1.5 !important; }
+  .report-content-box li li { margin: 0.18rem 0 !important; padding-left: 0.2rem; }
   .report-content-box strong { font-weight: 700; color: #1e3a5f; }
   .report-content-box hr { border: none; border-top: 1px solid rgba(30, 58, 95, 0.25); margin: 0.5em 0 !important; }
   .report-content-box ul ul li { page-break-inside: avoid; break-inside: avoid; orphans: 2; widows: 2; }
@@ -669,19 +725,19 @@ professors 배열을 순서대로 사용하세요. 각 교수 블록에서 **관
     table-layout: fixed;
     width: 100%;
     max-width: 100%;
-    margin: 0.3em 0 !important;
-    font-size: 0.78rem !important;
-    line-height: 1.28 !important;
+    margin: 0.4em 0 !important;
+    font-size: 0.88rem !important;
+    line-height: 1.45 !important;
     color: #1e3a5f;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
   .report-content-box th, .report-content-box td {
     border: 1px solid rgba(30, 58, 95, 0.3);
-    padding: 3px 6px !important;
+    padding: 4px 8px !important;
     text-align: left;
     color: #1e3a5f;
-    line-height: 1.28 !important;
+    line-height: 1.45 !important;
     word-break: keep-all;
     overflow-wrap: anywhere;
     min-width: 0;
@@ -711,8 +767,8 @@ professors 배열을 순서대로 사용하세요. 각 교수 블록에서 **관
         tail = """
 </body>
 </html>"""
-        # 본문: 인라인 스타일로 줄간격·여백 적용 (가독성 위해 1.28)
-        box_inline = "line-height:1.28; font-size:0.85rem; margin:0; padding:0.5rem 0.75rem;"
+        # 본문: 인라인 스타일로 줄간격·글자 크기 적용 (가독성)
+        box_inline = "line-height:1.5; font-size:0.95rem; margin:0; padding:0.5rem 0.75rem;"
         html_doc = head + "<div class=\"report-content-box\" style=\"" + box_inline + "\">" + body_html + "</div>" + tail
 
         try:
