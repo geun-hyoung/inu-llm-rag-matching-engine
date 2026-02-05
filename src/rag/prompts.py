@@ -241,7 +241,7 @@ KEYWORD_EXTRACTION_PROMPT = """---Goal---
 
 ---Rules---
 1. low_level: 쿼리 원문에 있는 기술 용어만 추출 (추론/연상 금지)
-2. high_level: 쿼리 의도를 "~기반", "~분석", "~개선", "~검출" 등의 형태로 요약
+2. high_level: 쿼리 의도를 "~기반", "~분석", "~개선", "~검출" 등의 형태로 요약. 쿼리에 특정 도메인·대상(산업, 제품, 공정, 응용 분야 등)이 언급되어 있으면 high_level에 반드시 해당 도메인을 포함하세요.
 3. 복합 명사 유지: 의미적으로 연결된 명사는 하나로 ("의료영상", "행동 분석")
 4. 1글자 단어 금지: "문", "관", "기", "물" 등 단독 사용 금지 (복합 명사로만 사용)
 5. 요청 표현 제외: "교수님", "전문가", "찾아줘", "알려줘", "필요해요", "하고 싶어요"
@@ -272,10 +272,13 @@ Query: "고객 리뷰를 감성분석 하려고 합니다"
 Output: {{"low_level_keywords": ["고객 리뷰", "감성분석"], "low_level_keywords_en": ["customer review", "sentiment analysis"], "high_level_keywords": ["텍스트 기반 감성 분석", "자연어처리 기반 리뷰 분석"], "high_level_keywords_en": ["text-based sentiment analysis", "NLP-based review analysis"]}}
 
 Query: "전기차 배터리 충전 시간이 너무 오래 걸려서 단축하고 싶어요"
-Output: {{"low_level_keywords": ["전기차 배터리", "충전 시간"], "low_level_keywords_en": ["electric vehicle battery", "charging time"], "high_level_keywords": ["배터리 충전 효율 향상", "급속 충전 기술"], "high_level_keywords_en": ["battery charging efficiency improvement", "fast charging technology"]}}
+Output: {{"low_level_keywords": ["전기차 배터리", "충전 시간"], "low_level_keywords_en": ["electric vehicle battery", "charging time"], "high_level_keywords": ["전기차 배터리 충전 효율 향상", "전기차 급속 충전 기술"], "high_level_keywords_en": ["electric vehicle battery charging efficiency improvement", "electric vehicle fast charging technology"]}}
 
 Query: "스마트팜에 IoT 센서 적용해서 작물 생육 모니터링 하려는데요"
-Output: {{"low_level_keywords": ["스마트팜", "IoT 센서", "작물 생육 모니터링"], "low_level_keywords_en": ["smart farm", "IoT sensor", "crop growth monitoring"], "high_level_keywords": ["IoT 기반 생육 모니터링", "정밀 농업"], "high_level_keywords_en": ["IoT-based growth monitoring", "precision agriculture"]}}
+Output: {{"low_level_keywords": ["스마트팜", "IoT 센서", "작물 생육 모니터링"], "low_level_keywords_en": ["smart farm", "IoT sensor", "crop growth monitoring"], "high_level_keywords": ["스마트팜 IoT 기반 생육 모니터링", "스마트팜 정밀 농업"], "high_level_keywords_en": ["smart farm IoT-based growth monitoring", "smart farm precision agriculture"]}}
+
+Query: "베어링 기계에서 제품 실패율 방지를 위해서 머신 러닝 기술을 적용하여 비용 절감 효과"
+Output: {{"low_level_keywords": ["베어링", "제품 실패율", "머신 러닝"], "low_level_keywords_en": ["bearing", "product failure rate", "machine learning"], "high_level_keywords": ["베어링 제조 머신러닝 기반 불량 예측", "베어링 생산 비용 절감"], "high_level_keywords_en": ["machine learning based bearing manufacturing defect prediction", "bearing production cost reduction"]}}
 
 ######################
 Query: {query}
