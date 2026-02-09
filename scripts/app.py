@@ -19,7 +19,7 @@ except ImportError:
 
 sys.path.append(str(Path(__file__).parent.parent))
 from src.reporting.report_generator import ReportGenerator
-from config.settings import OPENAI_API_KEY, RETRIEVAL_TOP_K, SIMILARITY_THRESHOLD
+from config.settings import OPENAI_API_KEY, RETRIEVAL_TOP_K, SIMILARITY_THRESHOLD, REPORT_FEW_SHOT_MAX_EXAMPLES
 from src.utils.cost_tracker import get_cost_tracker
 from src.ranking.professor_aggregator import ProfessorAggregator
 from src.ranking.ranker import ProfessorRanker
@@ -422,13 +422,17 @@ api_key = OPENAI_API_KEY or ""
 doc_types = ["patent", "article", "project"]
 default_few_shot_path = Path("data/report_few_shot_examples.json")
 few_shot_examples = None
-if default_few_shot_path.exists():
+if REPORT_FEW_SHOT_MAX_EXAMPLES and REPORT_FEW_SHOT_MAX_EXAMPLES > 0 and default_few_shot_path.exists():
     try:
         with open(default_few_shot_path, "r", encoding="utf-8") as f:
             few_shot_data = json.load(f)
             few_shot_examples = few_shot_data if isinstance(few_shot_data, list) else few_shot_data.get("examples")
+            if few_shot_examples and REPORT_FEW_SHOT_MAX_EXAMPLES is not None:
+                few_shot_examples = few_shot_examples[:REPORT_FEW_SHOT_MAX_EXAMPLES]
     except Exception:
         pass
+if few_shot_examples is None:
+    few_shot_examples = []
 
 # 실행할 검색어 (검색 폼 제출 시에만 설정)
 run_query = None

@@ -364,7 +364,8 @@ class ReportGenerator:
             
             prof_docs = []
             
-            for doc_type in ["patent", "article", "project"]:
+            # 보고서 표기 순서: 논문 → 특허 → 연구 과제
+            for doc_type in ["article", "patent", "project"]:
                 docs = documents.get(doc_type, [])
                 doc_scores_list = document_scores.get(doc_type, [])
                 score_dict = {str(ds.get("no", "")): ds.get("score", 0.0) for ds in doc_scores_list}
@@ -375,12 +376,16 @@ class ReportGenerator:
                 
                 for doc, _ in selected_docs:
                     text = doc.get("text", "")
+                    # 보고서 요약에 들어갈 본문: 줄바꿈을 공백으로 바꿔 한 줄로 (마지막 교수 논문 등에서 줄바꿈 깨짐 방지)
+                    text_one_line = re.sub(r"\s+", " ", (text or "").strip())
                     max_chars = REPORT_SUMMARY_MAX_CHARS if REPORT_SUMMARY_MAX_CHARS else 600
-                    text_for_summary = text[:max_chars] + "..." if len(text) > max_chars else text
+                    text_for_summary = text_one_line[:max_chars] + "..." if len(text_one_line) > max_chars else text_one_line
+                    title_raw = doc.get("title", "")
+                    title_one_line = re.sub(r"\s+", " ", (title_raw or "").strip()) if title_raw else ""
                     prof_docs.append({
                         "type": doc_type,
                         "type_ko": type_ko,
-                        "title": doc.get("title", ""),
+                        "title": title_one_line,
                         "summary": text_for_summary,
                         "year": doc.get("year", ""),
                     })
@@ -426,17 +431,15 @@ class ReportGenerator:
         LLM 출력에서 자주 틀리는 보고서 형식을 후처리로 정규화합니다.
         - 교수 헤더: "3. 구충완 교수" → "**3.** **구충완 교수**"
         - 소속/이메일: "소속:" → "**소속:**"
-        - 문서 목록: "[유형]" 아래 제목만 있고 번호 없는 줄 → "  2. **제목** (연도)", "요약:" → "  - 요약: "
+        - 문서 목록: "[유형]" 아래 제목은 "  **제목** (연도)" (번호 없음), 요약은 "  - 요약: " 들여쓰기로만 구분.
         """
         if not report_text or not report_text.strip():
             return report_text
 
         lines = report_text.split("\n")
         out: List[str] = []
-        # 문서 블록 내 상태: 0=블록 밖, 1=**[논문]** 등 유형 블록 안
         in_doc_block = False
-        doc_num = 0
-        # "### 👤 추천 교수" 구간에서만 교수/소속/이메일 정규화 적용
+        current_doc_type: Optional[str] = None  # 같은 유형 헤더 중복 제거용 (논문→특허→연구과제 전환 시만 새 헤더)
         in_professor_section = False
 
         i = 0
@@ -467,13 +470,16 @@ class ReportGenerator:
             doc_type = _is_doc_type_header(stripped)
             if doc_type:
                 in_doc_block = True
-                doc_num = 0
-                # 유형 블록 앞에 빈 줄 한 줄 (이전이 비어 있지 않을 때)
+                label = "연구 과제" if doc_type == "연구과제" else doc_type
+                header_line = "**[" + label + "]**"
+                # 같은 유형이 이미 열려 있으면 헤더 생략 (논문 여러 편일 때 [논문] 한 번만)
+                if current_doc_type == doc_type:
+                    i += 1
+                    continue
+                current_doc_type = doc_type
                 if out and out[-1].strip() and _is_doc_type_header(out[-1].strip()) is None:
                     out.append("")
-                # 통일 표기: **[논문]** **[특허]** **[연구 과제]**
-                label = "연구 과제" if doc_type == "연구과제" else doc_type
-                out.append("**[" + label + "]**")
+                out.append(header_line)
                 i += 1
                 continue
 
@@ -484,45 +490,31 @@ class ReportGenerator:
                 or (stripped.startswith("##### ") and "교수" in line)
             ):
                 in_doc_block = False
+                current_doc_type = None
 
-            # 문서 블록 안(또는 추천 교수 구간): 제목/요약 형식 보정 (마지막 교수 항목도 동일 적용)
+            # 문서 블록 안: 제목은 번호 없이 "  **제목** (연도)", 요약은 "  - 요약: "
             in_doc_region = in_doc_block or in_professor_section
             if in_doc_region:
                 year_at_end = re.match(r"^(.+?)\s*\((\d{4})\)\s*$", line.strip())
                 has_number_prefix = re.match(r"^\s*(\d+)\.\s+(.+)$", line.strip())
-                # 번호 없이 "제목 (연도)" 만 있는 경우 → "  N. **제목** (연도)"
-                if year_at_end and not re.match(r"^\s*\d+\.\s+", stripped):
-                    doc_num += 1
+                # 교수 줄 "N. 이름 교수" → 문서로 처리하지 않음
+                if has_number_prefix and has_number_prefix.group(2).strip().endswith("교수"):
+                    pass
+                elif year_at_end:
                     title_part = year_at_end.group(1).strip()
                     year_part = year_at_end.group(2)
+                    if has_number_prefix:
+                        rest = has_number_prefix.group(2).strip()
+                        ym = re.match(r"^(.+?)\s*\((\d{4})\)\s*$", rest)
+                        if ym:
+                            title_part, year_part = ym.group(1).strip(), ym.group(2)
                     if title_part.startswith("**") and title_part.endswith("**"):
-                        new_line = f"  {doc_num}. {title_part} ({year_part})"
+                        new_line = f"  {title_part} ({year_part})"
                     else:
-                        new_line = f"  {doc_num}. **{title_part}** ({year_part})"
+                        new_line = f"  **{title_part}** ({year_part})"
                     out.append(new_line)
                     i += 1
                     continue
-                # 번호는 있으나 들여쓰기/굵게 누락 ("1. 제목 (연도)") → "  N. **제목** (연도)". "N. 이름 교수" 는 문서가 아니므로 제외
-                if has_number_prefix:
-                    num_str, rest = has_number_prefix.group(1), has_number_prefix.group(2).strip()
-                    if rest.endswith("교수"):
-                        # 교수 헤더 줄(예: 3. 전광길 교수) → 문서로 처리하지 않고 아래 교수 보정으로 넘김
-                        pass
-                    else:
-                        year_match = re.match(r"^(.+?)\s*\((\d{4})\)\s*$", rest)
-                        if year_match:
-                            doc_num = int(num_str)
-                            title_part = year_match.group(1).strip()
-                            year_part = year_match.group(2)
-                            if title_part.startswith("**") and title_part.endswith("**"):
-                                new_line = f"  {doc_num}. {title_part} ({year_part})"
-                            else:
-                                new_line = f"  {doc_num}. **{title_part}** ({year_part})"
-                            out.append(new_line)
-                            i += 1
-                            continue
-                        else:
-                            doc_num += 1
 
             # 문서 블록 또는 추천 교수 구간: "요약:" / "- 요약:" 등 → "  - 요약: " 형태로 통일 (마지막 교수 항목 포함)
             if in_doc_block or in_professor_section:
@@ -569,9 +561,45 @@ class ReportGenerator:
             out.append(line)
             i += 1
 
-        # 2차 패스: [특허]/[연구 과제] 등에서 빠진 제목·요약 형식 한 번 더 보정
+        # 2차 패스: 제목/요약 형식 보정
         result = "\n".join(out)
-        return self._normalize_doc_format_second_pass(result)
+        result = self._normalize_doc_format_second_pass(result)
+        # 3차: "  - 요약:" 다음에 LLM이 줄바꿈으로 이어 쓴 내용을 한 줄로 합침
+        result = self._collapse_summary_line_breaks(result)
+        return result
+
+    def _collapse_summary_line_breaks(self, text: str) -> str:
+        """'  - 요약:' 다음에 LLM이 여러 줄로 쓴 내용을 한 줄로 합침 (마지막 교수 논문 등 줄바꿈 깨짐 방지)."""
+        if not text or not text.strip():
+            return text
+        lines = text.split("\n")
+        out: List[str] = []
+        for line in lines:
+            s = line.strip()
+            # 직전 줄이 "  - 요약:"으로 시작하고, 현재 줄이 새 문서/섹션이 아니면 요약 내용의 연속 → 한 줄로 합침
+            if out and out[-1].strip().startswith("  - 요약:"):
+                if not s:
+                    out.append(line)
+                    continue
+                if s.startswith("  - 요약:"):
+                    out.append(line)
+                    continue
+                if re.match(r"^\s*\*\*\[(논문|특허|연구 ?과제)\]\*\*", s) or re.match(r"^\[(논문|특허|연구 ?과제)\]", s):
+                    out.append(line)
+                    continue
+                if re.match(r"^\*\*.+\*\*\s*\(\d{4}\)\s*$", s) or re.match(r"^\d+\.\s+", s):
+                    out.append(line)
+                    continue
+                if s.startswith("### ") or s.startswith("---") or (s.startswith("##### ") and "교수" in line):
+                    out.append(line)
+                    continue
+                if re.match(r"^\*\*\d+\.\*\*", s):
+                    out.append(line)
+                    continue
+                out[-1] = out[-1].rstrip() + " " + s
+                continue
+            out.append(line)
+        return "\n".join(out)
 
     def _normalize_doc_format_second_pass(self, text: str) -> str:
         """**[논문]** **[특허]** **[연구 과제]** 블록: 유형 헤더 통일, 제목/요약 들여쓰기(2칸), 유형 앞 빈 줄."""
@@ -593,18 +621,20 @@ class ReportGenerator:
         lines = text.split("\n")
         out: List[str] = []
         in_doc_block = False
-        doc_num = 0
+        current_doc_type: Optional[str] = None
         for line in lines:
             s = line.strip()
             doc_type = _is_doc_type_header(s)
             if doc_type:
                 in_doc_block = True
-                doc_num = 0
-                # 유형 블록 앞에 빈 줄 한 줄 (이전 줄이 비어 있지 않을 때)
+                if current_doc_type == doc_type:
+                    continue
+                current_doc_type = doc_type
+                label = "연구 과제" if doc_type == "연구과제" else doc_type
+                header_line = "**[" + label + "]**"
                 if out and out[-1].strip() and not _is_doc_type_header(out[-1].strip()):
                     out.append("")
-                label = "연구 과제" if doc_type == "연구과제" else doc_type
-                out.append("**[" + label + "]**")
+                out.append(header_line)
                 continue
             if in_doc_block and (
                 re.match(r"^\s*---\s*$", line)
@@ -612,27 +642,20 @@ class ReportGenerator:
                 or (s.startswith("##### ") and "교수" in line)
             ):
                 in_doc_block = False
+                current_doc_type = None
             if in_doc_block:
                 year_m = re.match(r"^(.+?)\s*\((\d{4})\)\s*$", s)
-                # 이미 "  2. **제목** (연도)" 형태면 들여쓰기만 검사
                 has_num_and_year = re.match(r"^\s*(\d+)\.\s+(.+)\s*\((\d{4})\)\s*$", s)
-                if year_m and not has_num_and_year:
-                    doc_num += 1
+                if year_m:
                     title_part = year_m.group(1).strip()
                     year_part = year_m.group(2)
+                    if has_num_and_year:
+                        title_part = has_num_and_year.group(2).strip()
+                        year_part = has_num_and_year.group(3)
                     if title_part.startswith("**") and title_part.endswith("**"):
-                        out.append(f"  {doc_num}. {title_part} ({year_part})")
+                        out.append(f"  {title_part} ({year_part})")
                     else:
-                        out.append(f"  {doc_num}. **{title_part}** ({year_part})")
-                    continue
-                if has_num_and_year:
-                    num_str, mid, year_part = has_num_and_year.group(1), has_num_and_year.group(2).strip(), has_num_and_year.group(3)
-                    doc_num = int(num_str)
-                    if mid.startswith("**") and mid.endswith("**"):
-                        new_line = f"  {doc_num}. {mid} ({year_part})"
-                    else:
-                        new_line = f"  {doc_num}. **{mid}** ({year_part})"
-                    out.append(new_line)
+                        out.append(f"  **{title_part}** ({year_part})")
                     continue
                 if s.startswith("요약:") and not s.startswith("  - 요약:"):
                     rest = s[3:].strip()
@@ -673,7 +696,7 @@ class ReportGenerator:
 - **이모티콘**: 섹션 구분을 위해 각 섹션 제목 앞에 이모티콘을 하나씩 넣으세요. 예: 📋 제목, 🔍 사용자 검색어, 👤 추천 교수, 📌 유의사항 및 문의
 - **추천 교수 순서**: 추천되는 교수는 반드시 순서대로 1, 2, 3 번호를 붙이되, **마크다운 리스트(1. 2. 3.)를 쓰지 마세요.** 가로줄(---) 때문에 리스트가 끊겨 모두 "1."로 보이는 문제가 있으므로, 교수 번호는 **굵은 숫자**로만 표기하세요. 교수 표기는 **이름 + " 교수"** 까지 통째로 굵게 쓰세요. 예: **1.** **홍길동 교수**, **2.** **김철수 교수**, **3.** **이영희 교수**. 다음 줄에 **소속:**, **이메일:** 은 불릿(-) 없이 한 줄씩만 표기하고, 교수 블록 사이에는 가로줄(---)로 구분하세요.
 - AHP 점수·종합 점수는 보고서에 포함하지 마세요.
-- **사용자 검색어 관련 자료**: (1) 유형은 **대괄호 [ ]** 로만. (2) 각 문서는 첫 줄에 `  1. **제목** (연도)` 형식, 둘째 줄은 **반드시** `  - 요약: ` 로 시작(들여쓰기 2칸 + 하이픈 + 공백 + 요약:). "요약:"만 단독으로 쓰거나 불릿(-) 없이 쓰지 마세요. 요약 내용은 2~3문장, 입력 JSON의 summary를 참고해 사용자 검색어와의 연관성을 설명하고 문체를 통일하세요.
+- **사용자 검색어 관련 자료**: 유형은 **대괄호 [ ]** 로만. **문서에는 번호(1. 2. 3.)를 붙이지 마세요.** 각 문서는 두 줄로: (1) 제목 줄 `  **제목** (연도)` (들여쓰기 2칸 + **제목** + 공백 + (연도)), (2) 요약 줄 `  - 요약: ` 로 시작한 뒤 2~3문장. 들여쓰기로 제목과 요약만 구분하세요.
 
 ---
 
@@ -692,13 +715,13 @@ class ReportGenerator:
 
 ### 👤 추천 교수 및 관련 정보
 
-professors 배열을 **순서대로** 사용하세요. 교수 번호는 **1.** **2.** **3.** 처럼 굵은 숫자로만 쓰고, **교수 표기는 "이름 교수" 전체를 굵게** 표기하세요. 예: **1.** **홍길동 교수**. 교수명 한 줄 다음에 소속·이메일을 불릿 없이 한 줄씩 표기하고, 교수 블록 사이에는 가로줄(---)을 넣어 구분하세요. **사용자 검색어 관련 자료** 작성 규칙:
-- **유형**: 대괄호 [ ] 만 사용. **[논문]** **[특허]** **[연구 과제]** 중 해당하는 것만 표기.
-- **문서**: 유형 아래 **반드시** (1) 첫 줄: `  1. **제목** (연도)` (들여쓰기 2칸 + 번호 + **제목** + 공백 + (연도)), (2) 둘째 줄: `  - 요약: ` 로 시작한 뒤 2~3문장. **요약 줄은 예외 없이 반드시 "  - 요약: "으로 시작**하세요. "요약:"만 단독으로 쓰거나 불릿(-) 없이 쓰지 마세요.
-- **잘못된 예(금지)**: `제목 (연도)\n요약: 내용` 또는 `제목\n요약: 내용` → 이렇게 하지 마세요. 반드시 번호(1. 2. 3.)와 `  - 요약: ` 형식을 지키세요.
-- **유형 간 줄 간격**: **[논문]** / **[특허]** / **[연구 과제]** 블록 사이에는 빈 줄을 한 줄 이상 넣어 구분하세요.
+- **교수 순서**: 입력 JSON의 professors 배열 **순서 그대로** 1번, 2번, 3번으로 표기하세요. 교수 번호는 **1.** **2.** **3.** 처럼 굵은 숫자만, 교수명은 **이름 교수** 전체를 굵게. 예: **1.** **홍길동 교수**. 다음 줄에 **소속:** **이메일:** 한 줄씩만 표기하고, 교수 블록 끝에 가로줄(---)로 구분하세요.
+- **데이터 유형 순서**: 각 교수 내에서 **[논문]** → **[특허]** → **[연구 과제]** 순서로 표기. **각 유형(논문/특허/연구과제)은 한 번만 씁니다.** 같은 유형 헤더를 문서마다 반복하지 마세요. 해당 유형 문서가 여러 편이면, 유형 제목 한 번 아래에 모두 나열합니다.
+- **문서 항목 형식** (넘버링 없음): 유형 제목 **한 번** 아래에, 그 유형의 모든 문서를 제목+요약 쌍으로: (1) `  **제목** (연도)` (2) `  - 요약: ` 뒤에 2~3문장을 **한 줄로만** 작성 (요약 문장 사이에 줄바꿈 넣지 마세요). 넘버링은 교수(1. 2. 3.)에만 사용합니다.
+- **금지**: 제목 다음에 `요약:` 만 쓰거나 불릿 없이 요약을 쓰지 마세요. 요약 내용을 여러 줄로 나누지 마세요. 반드시 `  **제목** (연도)` 와 `  - 요약: ` 한 줄 형식을 지키세요.
+- **유형 간**: **[논문]** **[특허]** **[연구 과제]** 블록 사이에는 빈 줄 한 줄 이상 넣으세요.
 
-(documents 배열의 type_ko, title, summary, year 사용. 유형 아래에 문서가 없으면 해당 유형은 생략)
+(documents 배열은 이미 논문→특허→연구과제 순으로 정렬되어 있습니다. type_ko, title, summary, year만 사용하세요.)
 
 ##### **1.** **[이름] 교수**
 (위 [이름]은 입력 JSON의 professors[].name. **이름 교수** 전체를 굵게. 예: **홍길동 교수**)
@@ -707,17 +730,17 @@ professors 배열을 **순서대로** 사용하세요. 교수 번호는 **1.** *
 
 **사용자 검색어 관련 자료**
 **[논문]**
-  1. **제목1** (2024)
-  - 요약: (해당 문서 summary를 바탕으로 사용자 검색어와의 연관성을 2~3문장으로 설명. 문체 통일.)
-  2. **제목2** (2023)
-  - 요약: (동일한 방식으로 2~3문장 설명. 위와 같이 반드시 "  - 요약: "으로 시작.)
+  **제목1** (2024)
+  - 요약: (해당 문서 summary를 바탕으로 사용자 검색어와의 연관성을 2~3문장으로 설명.)
+  **제목2** (2023)
+  - 요약: (동일 형식으로 2~3문장. 반드시 "  - 요약: "으로 시작.)
 
 **[특허]**
-  1. **제목** (2024)
+  **제목** (2024)
   - 요약: (2~3문장으로 연관성 설명.)
 
 **[연구 과제]**
-  1. **제목** (2024)
+  **제목** (2024)
   - 요약: (2~3문장으로 연관성 설명.)
 
 ---
@@ -742,35 +765,27 @@ professors 배열을 **순서대로** 사용하세요. 교수 번호는 **1.** *
 ---
 """
         
-        # Few-shot 예시 추가 (REPORT_FEW_SHOT_MAX_EXAMPLES로 개수 제한 시 속도 향상)
-        if few_shot_examples:
-            limit = REPORT_FEW_SHOT_MAX_EXAMPLES
-            examples_to_use = (
-                few_shot_examples[:limit]
-                if limit is not None and isinstance(limit, int)
-                else few_shot_examples
-            )
+        # Few-shot 예시 추가 (REPORT_FEW_SHOT_MAX_EXAMPLES > 0 일 때만)
+        limit = REPORT_FEW_SHOT_MAX_EXAMPLES if REPORT_FEW_SHOT_MAX_EXAMPLES is not None else 0
+        if few_shot_examples and limit > 0:
+            examples_to_use = few_shot_examples[:limit] if isinstance(limit, int) else few_shot_examples
             for i, example in enumerate(examples_to_use, 1):
                 example_input = example.get("input", {})
                 example_output = example.get("output", "")
-                
                 base_prompt += f"""
 ### [✅ Few-shot 예시 {i}]
-
 입력 JSON:
 {json.dumps(example_input, ensure_ascii=False, indent=2)}
-
 출력 보고서:
 {example_output}
-
 ---
 """
-        
+
         # 최종 입력 JSON 추가
         base_prompt += f"""
-### [🧾 새롭게 작성해야 할 보고서 대상 JSON]
+### [🧾 작성할 보고서 입력 데이터]
 
-다음 JSON 데이터를 위와 동일한 형식(예시 1~2 참조)에 따라 구조화된 보고서로 작성하세요:
+아래 JSON을 **위 [보고서 출력 형식]에 맞춰** 그대로 따르세요. 교수만 1. 2. 3. 넘버링하고, 관련 자료는 번호 없이 `  **제목** (연도)` 와 `  - 요약: ` 들여쓰기로만 구분하세요.
 
 {json.dumps(input_json, ensure_ascii=False, indent=2)}
 """
