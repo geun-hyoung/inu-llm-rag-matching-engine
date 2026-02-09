@@ -1,84 +1,61 @@
 # INU LLM RAG Matching Engine
 
-**Match industry needs with university researchers** using RAG (Retrieval-Augmented Generation) and AHP ranking.
+RAG + AHP로 **검색어에 맞는 교수·논문·특허·연구과제**를 추천하고, **PDF 보고서**까지 생성하는 파이프라인입니다.
 
 ---
 
-## What it does
-
-1. **Collect** — Patents, articles, and research projects (with professor links).
-2. **Index** — Build vector + graph stores for semantic search.
-3. **Query** — Natural-language query → RAG retrieves relevant docs by type (patent/article/project).
-4. **Rank** — AHP weights (time, contribution, scale, status) → ranked professor list.
-5. **Report** — JSON, HTML, or PDF recommendation report.
-
----
-
-## Quick start
+## Quick Start
 
 ```bash
-# 1. Environment
+# 환경
 python -m venv venv
 venv\Scripts\activate   # Windows
 pip install -r requirements.txt
 python -m playwright install chromium
 
-# 2. Set config (API keys, DB, etc.) in config/
-# 3. Build index (once)
+# 설정: config/settings.py (API 키 등)
+
+# 인덱스 구축 (최초 1회)
 python scripts/build_index.py --doc-type patent
 python scripts/build_index.py --doc-type article
 python scripts/build_index.py --doc-type project
 
-# 4. Run matching
-python scripts/match.py "your search query" --doc-types patent article project --top-n 10
-
-# 5. Or use the web UI
+# 웹 앱 실행 (검색 → 추천 → 보고서 생성)
 streamlit run scripts/app.py
 ```
 
 ---
 
-## Main commands
+## 주요 명령어
 
-| Task | Command |
+| 용도 | 명령어 |
 |------|--------|
-| Build index | `python scripts/build_index.py --doc-type <patent\|article\|project>` |
-| Simple RAG query | `python scripts/query.py "query" --doc-types patent article project` |
-| Full match + report | `python scripts/match.py "query" --doc-types patent article project --top-n 10` |
-| AHP ranking only | `python scripts/run_ahp.py` |
-| Web app | `streamlit run scripts/app.py` |
-| EDA | `python data_exploration/patent_eda.py` (and article_eda, project_eda) |
+| 인덱스 구축 | `python scripts/build_index.py --doc-type patent` (article, project 동일) |
+| 검색 + 랭킹 + 보고서 | `python scripts/match.py "검색어" --doc-types patent article project --top-n 10` |
+| 웹 UI | `streamlit run scripts/app.py` |
+| AHP만 실행 | `python scripts/run_ahp.py` |
 
 ---
 
-## Project layout
+## 구조
 
-```
-├── config/           # Settings, AHP weights (ahp_config.py)
-├── data_collection/  # Fetch patent, article, project data
-├── data_filtering/   # Filter & preprocess text
-├── data_exploration/ # EDA scripts
-├── scripts/          # build_index, query, match, app (Streamlit), run_ahp
-├── src/
-│   ├── rag/          # Embedding, vector/graph store, retrieval
-│   ├── ranking/      # Professor aggregation + AHP ranker
-│   ├── reporting/    # Report generator (JSON/HTML/PDF)
-│   └── evaluation/   # Metrics, noise rate
-├── results/          # EDA outputs, reports, run logs
-└── requirements.txt
-```
+- **config/** — 설정, AHP 가중치
+- **data_collection/** — 특허·논문·연구과제 수집
+- **scripts/** — `build_index`, `match`, `app`(Streamlit)
+- **src/rag/** — 임베딩, 벡터/그래프 저장소, 검색
+- **src/ranking/** — 교수 집계, AHP 랭킹
+- **src/reporting/** — 보고서 생성(JSON/텍스트/PDF)
+- **results/** — 실행 결과, 보고서 PDF
 
 ---
 
-## Tech
+## 기술
 
-- **Python 3.11+**
-- **RAG**: OpenAI embeddings, ChromaDB, LightRAG-style graph
-- **Ranking**: AHP (configurable weights in `config/ahp_config.py`)
-- **Report PDF**: Playwright (Chromium)
+- Python 3.11+
+- RAG: OpenAI 임베딩, ChromaDB, 그래프 저장소
+- 랭킹: AHP (`config/ahp_config.py`)
+- PDF: Playwright(Chromium)
 
 ---
 
-## License
-
-Internal research use.
+*Internal research use.*
