@@ -16,6 +16,9 @@ from config.ahp_config import (
     ARTICLE_SCALE_WEIGHTS,
     PATENT_STATUS_WEIGHTS,
     PROJECT_SCALE_WEIGHTS,
+    MAX_ARTICLE_SCORE_PER_DOC,
+    MAX_PATENT_SCORE_PER_DOC,
+    MAX_PROJECT_SCORE_PER_DOC,
     map_article_contribution,
     map_article_journal_type,
     map_patent_status,
@@ -107,8 +110,10 @@ class ProfessorRanker:
                     "score": doc_score,
                     "metadata": doc.get("metadata", {})
                 })
-            # 타입별 점수: 합계 (논문/특허/연구과제가 많을수록 총점이 높아지도록)
-            scores_by_type["patent"] = sum(patent_scores)
+            # 타입별 점수: 합계 후 유형별 최대점으로 정규화 (논문/특허/연구과제 스케일 통일)
+            # 정규화 없으면 특허 1건 점수가 논문 1건보다 2~3배 커서, 특허만 있어도 논문만 있는 교수보다 순위가 올라가는 문제 발생
+            raw_patent = sum(patent_scores)
+            scores_by_type["patent"] = raw_patent / MAX_PATENT_SCORE_PER_DOC if MAX_PATENT_SCORE_PER_DOC else raw_patent
             
             # Article 점수 계산
             article_docs = prof_data["documents"].get("article", [])
@@ -122,7 +127,8 @@ class ProfessorRanker:
                     "score": doc_score,
                     "metadata": doc.get("metadata", {})
                 })
-            scores_by_type["article"] = sum(article_scores)
+            raw_article = sum(article_scores)
+            scores_by_type["article"] = raw_article / MAX_ARTICLE_SCORE_PER_DOC if MAX_ARTICLE_SCORE_PER_DOC else raw_article
             
             # Project 점수 계산
             project_docs = prof_data["documents"].get("project", [])
@@ -136,9 +142,10 @@ class ProfessorRanker:
                     "score": doc_score,
                     "metadata": doc.get("metadata", {})
                 })
-            scores_by_type["project"] = sum(project_scores)
+            raw_project = sum(project_scores)
+            scores_by_type["project"] = raw_project / MAX_PROJECT_SCORE_PER_DOC if MAX_PROJECT_SCORE_PER_DOC else raw_project
             
-            # 종합 점수 계산
+            # 종합 점수: 유형 가중치 × 정규화된 타입별 점수 (동일 품질 1건당 article 0.4, patent 0.2, project 0.4 비율 반영)
             total_score = (
                 ahp_weights.get("patent", 0) * scores_by_type["patent"] +
                 ahp_weights.get("article", 0) * scores_by_type["article"] +

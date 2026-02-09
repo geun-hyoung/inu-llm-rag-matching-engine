@@ -145,37 +145,43 @@ st.markdown("""
     .main .report-content-box h1, div.report-content-box h1 { font-size: 1.15rem !important; }
     .main .report-content-box h2, div.report-content-box h2 { font-size: 1.05rem !important; }
     .main .report-content-box h3, div.report-content-box h3 { font-size: 1rem !important; }
-    .main .report-content-box h4, div.report-content-box h4 { font-size: 0.98rem !important; }
+    .main .report-content-box h4, div.report-content-box h4 { font-size: 0.98rem !important; margin-bottom: 0.1em !important; }
+    .main .report-content-box h5, div.report-content-box h5 { font-size: 0.96rem !important; font-weight: 700 !important; }
+    .main .report-content-box h5 strong, div.report-content-box h5 strong { font-weight: 700 !important; }
+    .main .report-content-box h4 + ul, div.report-content-box h4 + ul { margin-top: 0.1rem !important; }
+    .main .report-content-box h4 + p, div.report-content-box h4 + p { margin: 0.12em 0 !important; }
+    .main .report-content-box h4 + p + p, div.report-content-box h4 + p + p { margin: 0.12em 0 !important; }
     /* 관련 문서: 1단계=유형(동그라미), 2단계=실제 문서(세부 불릿) 가독성 */
     .main .report-content-box ul, div.report-content-box ul {
         list-style-type: circle !important;
         padding-left: 1.5rem !important;
-        margin: 0.4rem 0 !important;
-        line-height: 1.5 !important;
+        margin: 0.5rem 0 !important;
+        line-height: 1.75 !important;
     }
     .main .report-content-box ul ul, div.report-content-box ul ul {
         list-style-type: disc !important;
         padding-left: 1.5rem !important;
-        margin: 0.25rem 0 0.5rem 0 !important;
+        margin: 0.35rem 0 0.55rem 0 !important;
     }
     .main .report-content-box li, div.report-content-box li {
-        margin: 0.35rem 0 !important;
-        line-height: 1.5 !important;
+        margin: 0.4rem 0 !important;
+        line-height: 1.75 !important;
     }
     .main .report-content-box li li, div.report-content-box li li {
-        margin: 0.25rem 0 !important;
+        margin: 0.3rem 0 !important;
     }
     .main .report-content-box p, .main .report-content-box li, .main .report-content-box span,
     .main .report-content-box td, .main .report-content-box h1, .main .report-content-box h2,
-    .main .report-content-box h3, .main .report-content-box h4, .main .report-content-box strong,
+    .main .report-content-box h3, .main .report-content-box h4, .main .report-content-box h5, .main .report-content-box strong,
     div.report-content-box p, div.report-content-box li, div.report-content-box span,
     div.report-content-box td, div.report-content-box h1, div.report-content-box h2,
-    div.report-content-box h3, div.report-content-box h4, div.report-content-box strong {
+    div.report-content-box h3, div.report-content-box h4, div.report-content-box h5, div.report-content-box strong {
         color: #1e3a5f !important;
         -webkit-text-fill-color: #1e3a5f !important;
     }
     .main .report-content-box table, div.report-content-box table { color: #1e3a5f !important; -webkit-text-fill-color: #1e3a5f !important; }
     .main .report-content-box th, div.report-content-box th { color: #1e3a5f !important; background: #e8eef4 !important; -webkit-text-fill-color: #1e3a5f !important; }
+    .main .report-content-box ol + p, div.report-content-box ol + p { margin-top: 0.6em !important; }
     .main .report-content-box hr, div.report-content-box hr { border-color: rgba(30, 58, 95, 0.25) !important; }
     /* 다크 모드: 앱 배경만 진한 회색, 카드·폼은 흰색 유지해 가독성 확보 */
     [data-theme="dark"] .stApp { color-scheme: dark !important; background: #1a1d23 !important; color: #1e3a5f !important; -webkit-text-fill-color: #1e3a5f !important; }
@@ -424,39 +430,41 @@ if default_few_shot_path.exists():
     except Exception:
         pass
 
-# 헤더
-st.markdown("## 의미 기반 검색과 생성형 AI를 활용한 산학 매칭 추천 시스템")
-st.caption("인천대학교 데이터사이언스 연구실 · AI 기반 산학 매칭 추천 보고서")
-st.markdown("---")
+# 실행할 검색어 (검색 폼 제출 시에만 설정)
+run_query = None
 
-# 검색 섹션
-st.markdown(
-    "<p style='font-size: 0.8rem; color: #1e3a5f; margin-bottom: 0.35rem; letter-spacing: 0.02em;'>RAG · AHP · 생성형 AI</p>",
-    unsafe_allow_html=True
-)
-st.markdown("### 한 번의 검색으로 AI 추천 보고서까지")
-st.markdown(
-    "검색어만 입력하면 **의미 기반 RAG 검색**으로 특허·논문·연구과제를 찾고, "
-    "**생성형 AI**가 산학 매칭 추천 보고서를 자동으로 만들어 드립니다."
-)
+# 보고서가 없을 때만 검색 화면(헤더·폼) 표시
+if "report_data" not in st.session_state:
+    # 헤더
+    st.markdown("## AI 기반 교수 추천 시스템")
+    st.markdown(
+        "입력하신 검색어를 바탕으로 관련성이 높은 교수와 관련 정보를 제공합니다. 검색 결과는 보고서 형태로 다운로드할 수 있습니다.")
 
-# 폼 사용: 입력 중에는 스크립트 재실행 없음 → 반응성 개선. 제출 시에만 실행.
-with st.form("search_form", clear_on_submit=False):
-    query = st.text_input(
-        "검색",
-        placeholder="예:  3D 스캐너를 활용한 기술 연구를 수행한 교수님을 찾고 있어요",
-        help="산학협력 매칭을 위한 검색 쿼리를 입력하세요. 구체적인 기술·분야 키워드를 넣으면 더 좋은 결과가 나옵니다.",
-        key="query_input",
-        label_visibility="collapsed",
-    )
-    st.caption(
-        "**💡 검색 팁** · 구체적인 **기술·분야 키워드**(예: 의료영상, 배터리 소재, 에이전트 개발)를 포함하면 매칭 정확도가 올라갑니다. "
-        "· 하고 싶은 **기술 개발·연구 주제**를 문장으로 써도 됩니다(예: \"전기차 배터리 충전 시간 단축 기술\"). "
-        "· 단어 하나만 쓰기보다는 **2~5개 키워드** 또는 **한 문장**으로 입력하는 것을 권장합니다."
-    )
-    col_btn, col_spacer = st.columns([1, 3])
-    with col_btn:
-        submitted = st.form_submit_button("🚀 검색 & 리포트 생성", type="primary")
+    # 폼 사용: 입력 중에는 스크립트 재실행 없음 → 반응성 개선. 제출 시에만 실행.
+    with st.form("search_form", clear_on_submit=False):
+        query = st.text_input(
+            "검색",
+            placeholder="예:  3D 스캐너를 활용한 기술 연구를 수행한 교수님을 찾고 있어요",
+            help="산학협력 매칭을 위한 검색 쿼리를 입력하세요. 구체적인 기술·분야 키워드를 넣으면 더 좋은 결과가 나옵니다.",
+            key="query_input",
+            label_visibility="collapsed",
+        )
+        st.caption(
+            "**💡 검색 팁**: 검색어는 **기술, 분야, 관심 주제와 관련된 키워드**를 **최대한 구체적으로 입력**해주세요."
+            " 단일 키워드보다는 **2~5개의 키워드 또는 짧은 문장**으로 작성하면 더 **정확한 추천 결과**를 얻을 수 있습니다." 
+        )
+
+        col_btn, col_spacer = st.columns([1, 3])
+        with col_btn:
+            submitted = st.form_submit_button("🚀 검색 & 보고서 생성", type="primary")
+
+    if submitted:
+        if not api_key:
+            st.error("⚠️ OpenAI API Key가 없습니다. config/settings.py에 OPENAI_API_KEY를 설정해주세요.")
+        elif not (query or "").strip():
+            st.warning("⚠️ 검색 쿼리를 입력해주세요.")
+        else:
+            run_query = (query or "").strip()
 def _run_pipeline(q: str, docs: list, key: str, few_shot, progress_bar, status_text):
     """파이프라인 실행 + 진행률 표시. 성공 시 session_state 설정, 실패 시 예외 발생."""
     tracker = get_cost_tracker()
@@ -552,12 +560,12 @@ def _run_pipeline(q: str, docs: list, key: str, few_shot, progress_bar, status_t
 
 
 def _open_pipeline_modal(q: str, docs: list, key: str, few_shot):
-    """모달(팝업)로 로딩 표시. Streamlit 1.33+ 필요."""
+    """모달(팝업)로 로딩 표시. 팝업이 있는 동안만 사용하며, 완료/오류 시 닫기 버튼으로만 닫음."""
+    close_key = "pipeline_modal_close"
     already_done = (
         "report_data" in st.session_state
         and st.session_state.get("report_data", {}).get("query") == q
     )
-    close_key = "pipeline_modal_close"
     if already_done:
         st.success("✅ 리포트 생성이 완료되었습니다.")
         if st.button("닫기", type="primary", key=close_key):
@@ -570,12 +578,15 @@ def _open_pipeline_modal(q: str, docs: list, key: str, few_shot):
     status_text = st.empty()
     try:
         _run_pipeline(q, docs, key, few_shot, progress_bar, status_text)
+        status_text.empty()
         st.success("✅ 리포트 생성이 완료되었습니다.")
         if st.button("닫기", type="primary", key=close_key):
             st.session_state.pop("_pipeline_modal_opened", None)
             st.session_state["_modal_just_closed"] = True
             st.rerun()
     except Exception as e:
+        status_text.empty()
+        progress_bar.empty()
         st.error(f"❌ 오류 발생: {str(e)}")
         st.exception(e)
         if st.button("닫기", key=close_key):
@@ -583,40 +594,6 @@ def _open_pipeline_modal(q: str, docs: list, key: str, few_shot):
             st.session_state["_modal_just_closed"] = True
             st.rerun()
 
-
-if submitted:
-    if not api_key:
-        st.error("⚠️ OpenAI API Key가 없습니다. config/settings.py에 OPENAI_API_KEY를 설정해주세요.")
-    elif not query:
-        st.warning("⚠️ 검색 쿼리를 입력해주세요.")
-    else:
-        if hasattr(st, "dialog"):
-            # 닫기/바깥 클릭 후 재검색 시 모달 다시 열리도록, 열지 않을 땐 플래그 제거.
-            st.session_state.pop("_modal_just_closed", None)
-            report_for_same_query = (
-                "report_data" in st.session_state
-                and st.session_state.get("report_data", {}).get("query") == query
-            )
-            modal_ok = not report_for_same_query and not st.session_state.get("_pipeline_modal_opened")
-            if modal_ok:
-                st.session_state["_pipeline_modal_opened"] = True
-                @st.dialog("리포트 생성 중", width="small", dismissible=True)
-                def run_pipeline_modal(q: str, docs: list, key: str, few_shot):
-                    _open_pipeline_modal(q, docs, key, few_shot)
-                run_pipeline_modal(query, doc_types, api_key, few_shot_examples)
-            else:
-                st.session_state.pop("_pipeline_modal_opened", None)
-        else:
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-            try:
-                _run_pipeline(query, doc_types, api_key, few_shot_examples, progress_bar, status_text)
-            except Exception as e:
-                st.error(f"❌ 오류 발생: {str(e)}")
-                st.exception(e)
-            finally:
-                progress_bar.empty()
-                status_text.empty()
 
 # 보고서 표시: 방금 생성했거나, PDF 다운로드 등 버튼 클릭 후 재실행 시에도 유지
 if "report_data" in st.session_state:
@@ -626,12 +603,10 @@ if "report_data" in st.session_state:
     cost_result = report_data.get("api_cost")
 
     st.success("✅ 리포트 생성 완료!")
+    if report_data.get("report_truncated"):
+        st.warning("⚠️ 보고서가 출력 길이 제한에 걸려 마지막 부분이 잘렸을 수 있습니다. 일부 교수의 특허/연구과제가 누락되었다면 config/settings.py에서 REPORT_MAX_TOKENS를 확인하세요.")
     if not pdf_path:
         st.warning("PDF 저장 실패. 터미널에서 한 번만 실행: **playwright install chromium**")
-
-    st.markdown("---")
-    st.markdown("### 📄 생성된 보고서")
-    st.caption("검색 질의 기반 추천 교수 및 관련 문서 요약")
 
     report_text = report_data.get("report_text", "")
     if markdown is not None:
@@ -669,6 +644,34 @@ if "report_data" in st.session_state:
     else:
         st.caption("PDF 생성 실패. 터미널에서 `playwright install chromium` 실행 후 다시 검색해 주세요.")
 
+# 실행할 검색어가 정해진 경우 파이프라인 실행
+if run_query:
+    if hasattr(st, "dialog"):
+        st.session_state.pop("_modal_just_closed", None)
+        report_for_same_query = (
+            "report_data" in st.session_state
+            and st.session_state.get("report_data", {}).get("query") == run_query
+        )
+        modal_ok = not report_for_same_query and not st.session_state.get("_pipeline_modal_opened")
+        if modal_ok:
+            st.session_state["_pipeline_modal_opened"] = True
+            @st.dialog("리포트 생성 중", width="small", dismissible=False)
+            def run_pipeline_modal(q: str, docs: list, key: str, few_shot):
+                _open_pipeline_modal(q, docs, key, few_shot)
+            run_pipeline_modal(run_query, doc_types, api_key, few_shot_examples)
+        else:
+            st.session_state.pop("_pipeline_modal_opened", None)
+    else:
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        try:
+            _run_pipeline(run_query, doc_types, api_key, few_shot_examples, progress_bar, status_text)
+        except Exception as e:
+            st.error(f"❌ 오류 발생: {str(e)}")
+            st.exception(e)
+        finally:
+            progress_bar.empty()
+            status_text.empty()
 
 # 페이지 맨 끝: 검색 & 리포트 생성 버튼 (최종 우선 적용)
 st.markdown("""

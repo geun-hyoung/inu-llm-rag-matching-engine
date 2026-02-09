@@ -14,6 +14,16 @@ from openai import OpenAI
 
 sys.path.append(str(Path(__file__).parent.parent.parent))
 from config.settings import OPENAI_API_KEY, LLM_MODEL
+try:
+    from config.settings import (
+        REPORT_FEW_SHOT_MAX_EXAMPLES,
+        REPORT_SUMMARY_MAX_CHARS,
+        REPORT_MAX_TOKENS,
+    )
+except ImportError:
+    REPORT_FEW_SHOT_MAX_EXAMPLES = None
+    REPORT_SUMMARY_MAX_CHARS = 500
+    REPORT_MAX_TOKENS = 4096
 from src.utils.cost_tracker import log_chat_usage, get_cost_tracker
 
 
@@ -195,6 +205,7 @@ class ReportGenerator:
         
         # GPT-4o-mini 호출 (속도: max_tokens 제한, temperature 낮춤)
         print("GPT-4o-mini를 사용하여 리포트 생성 중...")
+        max_tokens = getattr(self, "_max_tokens", None) or REPORT_MAX_TOKENS
         response = self.client.chat.completions.create(
             model=self.model,
             messages=[
@@ -202,7 +213,7 @@ class ReportGenerator:
                 {"role": "user", "content": prompt}
             ],
             temperature=0.0,
-            max_tokens=4096,
+            max_tokens=max_tokens,
         )
 
         # 비용 추적
@@ -212,10 +223,20 @@ class ReportGenerator:
             response=response
         )
 
-        report_text = response.choices[0].message.content
+        report_text = response.choices[0].message.content or ""
+        finish_reason = getattr(response.choices[0], "finish_reason", None) or ""
+        truncated = finish_reason == "length"
 
-        # 검색 개요(1차/2차 키워드)는 input_json 값으로 직접 치환 (LLM이 query만 반복하는 문제 방지)
+        if truncated:
+            print(
+                "[경고] 보고서가 출력 토큰 제한에 걸려 잘렸을 수 있습니다. "
+                "config/settings.py의 REPORT_MAX_TOKENS(현재 최대 16384)를 확인하세요."
+            )
+
+        # 사용자 검색어 섹션에서 1차/2차 키워드 블록이 있으면 제거 (해당 정보는 보고서에 미표기)
         report_text = self._inject_keyword_section(report_text, input_json)
+        # 교수/문서 형식 보정 (교수 번호·이름 굵게, 문서 번호·요약 줄 고정)
+        report_text = self._normalize_report_format(report_text)
 
         # 결과 구조화
         report_data = {
@@ -223,7 +244,8 @@ class ReportGenerator:
             "timestamp": datetime.now().strftime("%Y%m%d_%H%M%S"),
             "report_text": report_text,
             "input_data": input_json,
-            "model": self.model
+            "model": self.model,
+            "report_truncated": truncated,
         }
         
         return report_data
@@ -310,7 +332,7 @@ class ReportGenerator:
         리포트 생성을 위한 입력 JSON 준비.
 
         보고서에 표시되는 항목 출처:
-        - query, keywords.high_level/low_level: RAG 검색 결과(1차/2차 검색 키워드)
+        - query: 사용자 검색어(표시). keywords(1차/2차)는 보고서에 미표기.
         - professors: AHP ranked_professors 상위 3명
         - 각 교수 documents: AHP documents(patent/article/project) 유형별 상위 3개, type/title/summary/year만 사용.
 
@@ -353,12 +375,13 @@ class ReportGenerator:
                 
                 for doc, _ in selected_docs:
                     text = doc.get("text", "")
-                    summary = text[:200] + "..." if len(text) > 200 else text
+                    max_chars = REPORT_SUMMARY_MAX_CHARS if REPORT_SUMMARY_MAX_CHARS else 600
+                    text_for_summary = text[:max_chars] + "..." if len(text) > max_chars else text
                     prof_docs.append({
                         "type": doc_type,
                         "type_ko": type_ko,
                         "title": doc.get("title", ""),
-                        "summary": summary,
+                        "summary": text_for_summary,
                         "year": doc.get("year", ""),
                     })
             
@@ -383,30 +406,244 @@ class ReportGenerator:
 
     def _inject_keyword_section(self, report_text: str, input_json: Dict[str, Any]) -> str:
         """
-        보고서 본문의 '검색 개요' 섹션을 input_json의 실제 키워드 값으로 치환.
-        LLM이 query만 반복해 넣는 문제를 방지하기 위해 코드로 1차(저수준)/2차(고수준)를 채움.
+        보고서 본문의 '사용자 검색어' 섹션에서 1차/2차·저수준·고수준 키워드 블록이 있으면 제거.
+        (해당 정보는 보고서에 표기하지 않음)
         """
-        keywords = input_json.get("keywords", {})
-        low_level = keywords.get("low_level", []) or []
-        high_level = keywords.get("high_level", []) or []
-        low_str = ", ".join(str(k).strip() for k in low_level) if low_level else "(없음)"
-        high_str = ", ".join(str(k).strip() for k in high_level) if high_level else "(없음)"
+        section_header = "### 🔍 사용자 검색어"
+        replacement_block = section_header + "\n\n"
 
-        section_header = "### 🔍 사용자 검색어 (검색 개요)"
-        replacement_block = (
-            f"{section_header}\n\n"
-            f"- **1차 검색 키워드 (저수준):** {low_str}\n"
-            f"- **2차 검색 키워드 (고수준):** {high_str}"
-        )
-
-        # "### 🔍 사용자 검색어 (검색 개요)" 부터 다음 "###" 또는 "---" 직전까지를 치환
+        # "### 🔍 사용자 검색어" (또는 예전 "검색 개요" 포함 제목) 부터 다음 "###" 또는 "---" 직전까지를 헤더만 남기고 치환
         pattern = re.compile(
-            r"(### 🔍 사용자 검색어 \(검색 개요\))\s*\n.*?(?=\n### |\n---|\n# |\Z)",
+            r"(### 🔍 사용자 검색어(?: \(검색 개요\))?)\s*\n.*?(?=\n### |\n---|\n# |\Z)",
             re.DOTALL,
         )
         if pattern.search(report_text):
-            return pattern.sub(replacement_block + "\n", report_text, count=1)
+            return pattern.sub(replacement_block, report_text, count=1)
         return report_text
+
+    def _normalize_report_format(self, report_text: str) -> str:
+        """
+        LLM 출력에서 자주 틀리는 보고서 형식을 후처리로 정규화합니다.
+        - 교수 헤더: "3. 구충완 교수" → "**3.** **구충완 교수**"
+        - 소속/이메일: "소속:" → "**소속:**"
+        - 문서 목록: "[유형]" 아래 제목만 있고 번호 없는 줄 → "  2. **제목** (연도)", "요약:" → "  - 요약: "
+        """
+        if not report_text or not report_text.strip():
+            return report_text
+
+        lines = report_text.split("\n")
+        out: List[str] = []
+        # 문서 블록 내 상태: 0=블록 밖, 1=**[논문]** 등 유형 블록 안
+        in_doc_block = False
+        doc_num = 0
+        # "### 👤 추천 교수" 구간에서만 교수/소속/이메일 정규화 적용
+        in_professor_section = False
+
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            stripped = line.strip()
+            # 섹션 진입: 추천 교수 구간 (##### N. 이름 교수 포함해도 구간으로 인식)
+            if "### 👤 추천 교수" in line or ("##### " in line and "교수" in line) or ("##### **" in line and "교수" in line):
+                in_professor_section = True
+            if stripped.startswith("### ") and "추천 교수" not in line:
+                in_professor_section = False
+            if line.strip() == "---" and in_professor_section:
+                pass  # 유지
+
+            # 문서 유형 블록 시작 (**[논문]** / [논문] / **특허** / 특허 등 모든 변형)
+            def _is_doc_type_header(s: str) -> Optional[str]:
+                for pattern in [
+                    r"^\*\*\[(논문|특허|연구 ?과제)\]\*\*$",
+                    r"^\[(논문|특허|연구 ?과제)\]$",
+                    r"^\*\*(논문|특허|연구 ?과제)\*\*$",
+                    r"^(논문|특허|연구 ?과제)$",
+                ]:
+                    m = re.match(pattern, s)
+                    if m:
+                        return m.group(1).replace(" ", "")
+                return None
+
+            doc_type = _is_doc_type_header(stripped)
+            if doc_type:
+                in_doc_block = True
+                doc_num = 0
+                # 유형 블록 앞에 빈 줄 한 줄 (이전이 비어 있지 않을 때)
+                if out and out[-1].strip() and _is_doc_type_header(out[-1].strip()) is None:
+                    out.append("")
+                # 통일 표기: **[논문]** **[특허]** **[연구 과제]**
+                label = "연구 과제" if doc_type == "연구과제" else doc_type
+                out.append("**[" + label + "]**")
+                i += 1
+                continue
+
+            # 문서 블록 끝: 다음 교수(#####) 또는 ### 또는 ---
+            if in_doc_block and (
+                re.match(r"^\s*---\s*$", line)
+                or stripped.startswith("### ")
+                or (stripped.startswith("##### ") and "교수" in line)
+            ):
+                in_doc_block = False
+
+            # 문서 블록 안(또는 추천 교수 구간): 제목/요약 형식 보정 (마지막 교수 항목도 동일 적용)
+            in_doc_region = in_doc_block or in_professor_section
+            if in_doc_region:
+                year_at_end = re.match(r"^(.+?)\s*\((\d{4})\)\s*$", line.strip())
+                has_number_prefix = re.match(r"^\s*(\d+)\.\s+(.+)$", line.strip())
+                # 번호 없이 "제목 (연도)" 만 있는 경우 → "  N. **제목** (연도)"
+                if year_at_end and not re.match(r"^\s*\d+\.\s+", stripped):
+                    doc_num += 1
+                    title_part = year_at_end.group(1).strip()
+                    year_part = year_at_end.group(2)
+                    if title_part.startswith("**") and title_part.endswith("**"):
+                        new_line = f"  {doc_num}. {title_part} ({year_part})"
+                    else:
+                        new_line = f"  {doc_num}. **{title_part}** ({year_part})"
+                    out.append(new_line)
+                    i += 1
+                    continue
+                # 번호는 있으나 들여쓰기/굵게 누락 ("1. 제목 (연도)") → "  N. **제목** (연도)". "N. 이름 교수" 는 문서가 아니므로 제외
+                if has_number_prefix:
+                    num_str, rest = has_number_prefix.group(1), has_number_prefix.group(2).strip()
+                    if rest.endswith("교수"):
+                        # 교수 헤더 줄(예: 3. 전광길 교수) → 문서로 처리하지 않고 아래 교수 보정으로 넘김
+                        pass
+                    else:
+                        year_match = re.match(r"^(.+?)\s*\((\d{4})\)\s*$", rest)
+                        if year_match:
+                            doc_num = int(num_str)
+                            title_part = year_match.group(1).strip()
+                            year_part = year_match.group(2)
+                            if title_part.startswith("**") and title_part.endswith("**"):
+                                new_line = f"  {doc_num}. {title_part} ({year_part})"
+                            else:
+                                new_line = f"  {doc_num}. **{title_part}** ({year_part})"
+                            out.append(new_line)
+                            i += 1
+                            continue
+                        else:
+                            doc_num += 1
+
+            # 문서 블록 또는 추천 교수 구간: "요약:" / "- 요약:" 등 → "  - 요약: " 형태로 통일 (마지막 교수 항목 포함)
+            if in_doc_block or in_professor_section:
+                s = line.strip()
+                if s.startswith("요약:") and not s.startswith("  - 요약:"):
+                    rest = s[3:].strip()
+                    out.append("  - 요약: " + rest)
+                    i += 1
+                    continue
+                if (s.startswith("- 요약:") or s.startswith("-요약:")) and not line.startswith("  - "):
+                    rest = s.split("요약:", 1)[-1].strip()
+                    out.append("  - 요약: " + rest)
+                    i += 1
+                    continue
+
+            # 추천 교수 구간: "##### N. 이름 교수" 또는 "N. 이름 교수" → 굵게 보정 (이미 ** 있으면 스킵)
+            if in_professor_section and "교수" in line and not stripped.startswith("**"):
+                # "##### 3. 전광길 교수" 형태
+                m_heading = re.match(r"^(#####\s+)(\d+)\.\s+(.+?)\s*교수\s*$", stripped)
+                if m_heading:
+                    prefix, num, name = m_heading.group(1), m_heading.group(2), m_heading.group(3).strip()
+                    out.append(prefix + "**" + num + ".** **" + name + " 교수**")
+                    i += 1
+                    continue
+                # "3. 전광길 교수" 단독 줄
+                m_plain = re.match(r"^(\d+)\.\s+(.+?)\s*교수\s*$", stripped)
+                if m_plain:
+                    num, name = m_plain.group(1), m_plain.group(2).strip()
+                    out.append("**" + num + ".** **" + name + " 교수**")
+                    i += 1
+                    continue
+
+            # 추천 교수 구간: "소속:" / "이메일:" 앞에 ** 없으면 추가
+            if in_professor_section:
+                if re.match(r"^소속:\s*", stripped) and not stripped.startswith("**"):
+                    out.append("**소속:** " + line.strip()[3:].strip())
+                    i += 1
+                    continue
+                if re.match(r"^이메일:\s*", stripped) and not stripped.startswith("**"):
+                    out.append("**이메일:** " + line.strip()[4:].strip())
+                    i += 1
+                    continue
+
+            out.append(line)
+            i += 1
+
+        # 2차 패스: [특허]/[연구 과제] 등에서 빠진 제목·요약 형식 한 번 더 보정
+        result = "\n".join(out)
+        return self._normalize_doc_format_second_pass(result)
+
+    def _normalize_doc_format_second_pass(self, text: str) -> str:
+        """**[논문]** **[특허]** **[연구 과제]** 블록: 유형 헤더 통일, 제목/요약 들여쓰기(2칸), 유형 앞 빈 줄."""
+        if not text or not text.strip():
+            return text
+
+        def _is_doc_type_header(s: str) -> Optional[str]:
+            for pattern in [
+                r"^\*\*\[(논문|특허|연구 ?과제)\]\*\*$",
+                r"^\[(논문|특허|연구 ?과제)\]$",
+                r"^\*\*(논문|특허|연구 ?과제)\*\*$",
+                r"^(논문|특허|연구 ?과제)$",
+            ]:
+                m = re.match(pattern, s)
+                if m:
+                    return m.group(1).replace(" ", "")
+            return None
+
+        lines = text.split("\n")
+        out: List[str] = []
+        in_doc_block = False
+        doc_num = 0
+        for line in lines:
+            s = line.strip()
+            doc_type = _is_doc_type_header(s)
+            if doc_type:
+                in_doc_block = True
+                doc_num = 0
+                # 유형 블록 앞에 빈 줄 한 줄 (이전 줄이 비어 있지 않을 때)
+                if out and out[-1].strip() and not _is_doc_type_header(out[-1].strip()):
+                    out.append("")
+                label = "연구 과제" if doc_type == "연구과제" else doc_type
+                out.append("**[" + label + "]**")
+                continue
+            if in_doc_block and (
+                re.match(r"^\s*---\s*$", line)
+                or s.startswith("### ")
+                or (s.startswith("##### ") and "교수" in line)
+            ):
+                in_doc_block = False
+            if in_doc_block:
+                year_m = re.match(r"^(.+?)\s*\((\d{4})\)\s*$", s)
+                # 이미 "  2. **제목** (연도)" 형태면 들여쓰기만 검사
+                has_num_and_year = re.match(r"^\s*(\d+)\.\s+(.+)\s*\((\d{4})\)\s*$", s)
+                if year_m and not has_num_and_year:
+                    doc_num += 1
+                    title_part = year_m.group(1).strip()
+                    year_part = year_m.group(2)
+                    if title_part.startswith("**") and title_part.endswith("**"):
+                        out.append(f"  {doc_num}. {title_part} ({year_part})")
+                    else:
+                        out.append(f"  {doc_num}. **{title_part}** ({year_part})")
+                    continue
+                if has_num_and_year:
+                    num_str, mid, year_part = has_num_and_year.group(1), has_num_and_year.group(2).strip(), has_num_and_year.group(3)
+                    doc_num = int(num_str)
+                    if mid.startswith("**") and mid.endswith("**"):
+                        new_line = f"  {doc_num}. {mid} ({year_part})"
+                    else:
+                        new_line = f"  {doc_num}. **{mid}** ({year_part})"
+                    out.append(new_line)
+                    continue
+                if s.startswith("요약:") and not s.startswith("  - 요약:"):
+                    rest = s[3:].strip()
+                    out.append("  - 요약: " + rest)
+                    continue
+                if (s.startswith("- 요약:") or s.startswith("-요약:")) and not line.startswith("  - "):
+                    rest = s.split("요약:", 1)[-1].strip()
+                    out.append("  - 요약: " + rest)
+                    continue
+            out.append(line)
+        return "\n".join(out)
 
     def _build_prompt(
         self,
@@ -432,11 +669,11 @@ class ReportGenerator:
 [지침]
 - 입력 JSON의 값만 사용하고, 추론·해석·평가 문장을 넣지 마세요.
 - **마크다운 활용**: 제목은 #(대제목), ##(섹션), ###(소제목)으로 계층을 나누고, **굵게**는 **키워드**처럼 반드시 사용하세요.
-- **강조**: "사용자 검색어", "1차 검색 키워드 (저수준)", "2차 검색 키워드 (고수준)", "소속", "이메일", "문서 유형", "제목", "연도" 등 라벨은 **굵게** 처리하세요.
-- **이모티콘**: 섹션 구분을 위해 각 섹션 제목 앞에 이모티콘을 하나씩 넣으세요. 예: 📋 제목, 🔍 검색 개요, 👤 추천 교수, 📌 유의사항 및 문의
-- 교수는 반드시 "1. OOO 교수", "2. OOO 교수", "3. OOO 교수" 형식으로 번호와 함께 표기하세요.
+- **강조**: "사용자 검색어", **"교수명"**, "소속", "이메일", "문서 유형", "제목", "연도" 등 라벨은 **굵게** 처리하세요. 교수 표기는 **이름과 '교수'까지 통째로 굵게** 하세요. 예: **홍길동 교수**.
+- **이모티콘**: 섹션 구분을 위해 각 섹션 제목 앞에 이모티콘을 하나씩 넣으세요. 예: 📋 제목, 🔍 사용자 검색어, 👤 추천 교수, 📌 유의사항 및 문의
+- **추천 교수 순서**: 추천되는 교수는 반드시 순서대로 1, 2, 3 번호를 붙이되, **마크다운 리스트(1. 2. 3.)를 쓰지 마세요.** 가로줄(---) 때문에 리스트가 끊겨 모두 "1."로 보이는 문제가 있으므로, 교수 번호는 **굵은 숫자**로만 표기하세요. 교수 표기는 **이름 + " 교수"** 까지 통째로 굵게 쓰세요. 예: **1.** **홍길동 교수**, **2.** **김철수 교수**, **3.** **이영희 교수**. 다음 줄에 **소속:**, **이메일:** 은 불릿(-) 없이 한 줄씩만 표기하고, 교수 블록 사이에는 가로줄(---)로 구분하세요.
 - AHP 점수·종합 점수는 보고서에 포함하지 마세요.
-- **관련 문서**: 반드시 **2단계 불릿**으로만 작성하세요. 1단계 불릿에는 유형(**논문**, **특허**, **연구 과제**)만 쓰고, 그 아래 2단계 불릿(들여쓰기)에 실제 문서를 `**[제목]** (연도): 요약` 형식으로 나열하세요. 유형은 한국어로만 표기하고, 각 문서 요약은 사용자 검색어와 관련지어 한두 문장으로 하세요.
+- **사용자 검색어 관련 자료**: (1) 유형은 **대괄호 [ ]** 로만. (2) 각 문서는 첫 줄에 `  1. **제목** (연도)` 형식, 둘째 줄은 **반드시** `  - 요약: ` 로 시작(들여쓰기 2칸 + 하이픈 + 공백 + 요약:). "요약:"만 단독으로 쓰거나 불릿(-) 없이 쓰지 마세요. 요약 내용은 2~3문장, 입력 JSON의 summary를 참고해 사용자 검색어와의 연관성을 설명하고 문체를 통일하세요.
 
 ---
 
@@ -444,8 +681,7 @@ class ReportGenerator:
 
 보고서 **맨 위**에 다음 제목 블록을 넣으세요 (제목·사용자 검색어는 본문보다 한 단계 작게):
 
----
-# 📋 산학 매칭 추천 보고서
+# 📋 AI 기반 검색 결과
 
 **사용자 검색어:** (입력 JSON의 query 값)
 ---
@@ -454,58 +690,67 @@ class ReportGenerator:
 
 ---
 
-### 🔍 사용자 검색어 (검색 개요)
+### 👤 추천 교수 및 관련 정보
 
-- **1차 검색 키워드 (저수준):** (keywords.low_level 배열을 쉼표로 나열)
-- **2차 검색 키워드 (고수준):** (keywords.high_level 배열을 쉼표로 나열)
+professors 배열을 **순서대로** 사용하세요. 교수 번호는 **1.** **2.** **3.** 처럼 굵은 숫자로만 쓰고, **교수 표기는 "이름 교수" 전체를 굵게** 표기하세요. 예: **1.** **홍길동 교수**. 교수명 한 줄 다음에 소속·이메일을 불릿 없이 한 줄씩 표기하고, 교수 블록 사이에는 가로줄(---)을 넣어 구분하세요. **사용자 검색어 관련 자료** 작성 규칙:
+- **유형**: 대괄호 [ ] 만 사용. **[논문]** **[특허]** **[연구 과제]** 중 해당하는 것만 표기.
+- **문서**: 유형 아래 **반드시** (1) 첫 줄: `  1. **제목** (연도)` (들여쓰기 2칸 + 번호 + **제목** + 공백 + (연도)), (2) 둘째 줄: `  - 요약: ` 로 시작한 뒤 2~3문장. **요약 줄은 예외 없이 반드시 "  - 요약: "으로 시작**하세요. "요약:"만 단독으로 쓰거나 불릿(-) 없이 쓰지 마세요.
+- **잘못된 예(금지)**: `제목 (연도)\n요약: 내용` 또는 `제목\n요약: 내용` → 이렇게 하지 마세요. 반드시 번호(1. 2. 3.)와 `  - 요약: ` 형식을 지키세요.
+- **유형 간 줄 간격**: **[논문]** / **[특허]** / **[연구 과제]** 블록 사이에는 빈 줄을 한 줄 이상 넣어 구분하세요.
+
+(documents 배열의 type_ko, title, summary, year 사용. 유형 아래에 문서가 없으면 해당 유형은 생략)
+
+##### **1.** **[이름] 교수**
+(위 [이름]은 입력 JSON의 professors[].name. **이름 교수** 전체를 굵게. 예: **홍길동 교수**)
+**소속:** (department)
+**이메일:** (contact, 없으면 "-")
+
+**사용자 검색어 관련 자료**
+**[논문]**
+  1. **제목1** (2024)
+  - 요약: (해당 문서 summary를 바탕으로 사용자 검색어와의 연관성을 2~3문장으로 설명. 문체 통일.)
+  2. **제목2** (2023)
+  - 요약: (동일한 방식으로 2~3문장 설명. 위와 같이 반드시 "  - 요약: "으로 시작.)
+
+**[특허]**
+  1. **제목** (2024)
+  - 요약: (2~3문장으로 연관성 설명.)
+
+**[연구 과제]**
+  1. **제목** (2024)
+  - 요약: (2~3문장으로 연관성 설명.)
+
+---
+(2번, 3번 교수는 **2.** **[이름] 교수**, **3.** **[이름] 교수**처럼 번호와 이름만 바꿔 반복. "이름 교수" 전체를 **굵게**. 각 교수 블록 끝에 ---로 구분)
 
 ---
 
-### 👤 추천 교수 및 관련 문서
+### 📌 유의사항 및 문의 안내
 
-professors 배열을 순서대로 사용하세요. 각 교수 블록에서 **관련 문서**는 반드시 아래 형식처럼 **2단계 불릿**으로만 작성하세요.
-- **1단계 불릿**: 유형 이름만 (**논문**, **특허**, **연구 과제** 중 해당하는 것만)
-- **2단계 불릿**: 그 유형에 속한 실제 문서들을 들여쓰기한 세부 불릿으로, 각 줄은 `- **[제목]** (연도): 요약 한두 문장` 형식
+- 추천 결과는 입력하신 검색어와 시스템에 등록된 정보를 바탕으로 제공되며, 검색 조건에 따라 달라질 수 있습니다.
 
-(documents 배열의 type_ko 값 사용. 유형 아래에 문서가 없으면 해당 유형은 생략)
+- 출력 순서는 교수 순위나 우선순위를 의미하지 않으며, 본 결과는 참고 자료로 활용해 주시기를 바랍니다.
 
-#### 1. [이름] 교수
-- **소속:** (department)
-- **이메일:** (contact, 없으면 "-")
-
-**관련 문서**
-- **논문**
-  - **[제목1]** (연도): (사용자 검색어와 관련지어 한두 문장 요약)
-  - **[제목2]** (연도): (요약)
-- **특허**
-  - **[제목]** (연도): (요약)
-- **연구 과제**
-  - **[제목]** (연도): (요약)
-
-(2번, 3번 교수도 위와 동일한 2단계 불릿 구조로 반복)
-
----
-
-### 📌 유의사항 및 산학협력단 연락처
-
-다음 내용을 **그대로** 반영하세요.
-
-제공되는 자료는 현재 데이터베이스 기반이며, 사용자 검색어에 따라 결과 값이 달라질 수 있습니다. 부정확성이나 오류의 가능성을 가지고 있습니다. 교수 순서는 사용자 검색어나 현재 데이터베이스에 따라 달라질 수 있어 참고용으로 이용하시기 바랍니다.
-
-추가적인 정보가 필요한 경우 **산학협력단**에 연락을 취하시기 바랍니다.
+- 보다 정확한 정보나 산학협력 관련 상담이 필요하신 경우, 아래 산학협력단 담당자에게 문의해주시기 바랍니다.
 
 | **구분** | **내용** |
 |------|------|
 | 담당자 | 김OO |
 | 이메일 | oo@inu.ac.kr |
-| 연락처 | 032-835-0000 |
+| 연락처 | 032-000-0000 |
 
 ---
 """
         
-        # Few-shot 예시 추가
+        # Few-shot 예시 추가 (REPORT_FEW_SHOT_MAX_EXAMPLES로 개수 제한 시 속도 향상)
         if few_shot_examples:
-            for i, example in enumerate(few_shot_examples, 1):
+            limit = REPORT_FEW_SHOT_MAX_EXAMPLES
+            examples_to_use = (
+                few_shot_examples[:limit]
+                if limit is not None and isinstance(limit, int)
+                else few_shot_examples
+            )
+            for i, example in enumerate(examples_to_use, 1):
                 example_input = example.get("input", {})
                 example_output = example.get("output", "")
                 
@@ -643,7 +888,7 @@ professors 배열을 순서대로 사용하세요. 각 교수 블록에서 **관
             body_html,
             flags=re.IGNORECASE,
         )
-        # 관련 문서: "(연도):" 를 한 덩어리로 유지, "): " 뒤는 논리적 공백 (콜백 사용으로 re 이스케이프 오류 방지)
+        # 사용자 검색어 관련 자료: "(연도):" 또는 "연도:" 를 한 덩어리로 유지, "): " 뒤는 논리적 공백 (콜백 사용으로 re 이스케이프 오류 방지)
         def _year_span(match):
             return '<span class="doc-year">(' + match.group(1) + '):</span>' + chr(0x00A0)
         body_html = re.sub(r"\((\d{4})\):\s+", _year_span, body_html)
@@ -665,7 +910,7 @@ professors 배열을 순서대로 사용하세요. 각 교수 블록에서 **관
   body {
     font-family: "Malgun Gothic", "Segoe UI Emoji", "Apple Color Emoji", "Apple SD Gothic Neo", sans-serif;
     font-size: 0.95rem !important;
-    line-height: 1.5 !important;
+    line-height: 1.75 !important;
     color: #1e3a5f;
     margin: 0 !important;
     padding: 0.4rem 0.6rem !important;
@@ -684,7 +929,7 @@ professors 배열을 순서대로 사용하세요. 각 교수 블록에서 **관
     border-radius: 6px;
     border: 1px solid rgba(30, 58, 95, 0.2);
     font-size: 0.95rem !important;
-    line-height: 1.5 !important;
+    line-height: 1.75 !important;
     width: 100%;
     max-width: 100%;
     min-width: 0;
@@ -693,41 +938,47 @@ professors 배열을 순서대로 사용하세요. 각 교수 블록에서 **관
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
-  .report-content-box h1, .report-content-box h2, .report-content-box h3, .report-content-box h4,
+  .report-content-box h1, .report-content-box h2, .report-content-box h3, .report-content-box h4, .report-content-box h5,
   .report-content-box p, .report-content-box li, .report-content-box span,
-  .report-content-box td, .report-content-box strong { line-height: 1.5 !important; }
-  .report-content-box h1 { font-size: 1.15rem !important; margin: 0.5em 0 0.35em !important; color: #1e3a5f; font-weight: 700; }
-  .report-content-box h2 { font-size: 1.08rem !important; margin: 0.5em 0 0.28em !important; color: #1e3a5f; font-weight: 700; }
-  .report-content-box h3 { font-size: 1.02rem !important; margin: 0.45em 0 0.22em !important; color: #1e3a5f; font-weight: 700; }
-  .report-content-box h4 { font-size: 0.98rem !important; margin: 0.4em 0 0.2em !important; color: #1e3a5f; font-weight: 700; }
-  .report-content-box p { margin: 0.6em 0 !important; line-height: 1.5 !important; }
+  .report-content-box td, .report-content-box strong { line-height: 1.75 !important; }
+  .report-content-box h1 { font-size: 1.15rem !important; margin: 0.6em 0 0.4em !important; color: #1e3a5f; font-weight: 700; }
+  .report-content-box h2 { font-size: 1.08rem !important; margin: 0.55em 0 0.35em !important; color: #1e3a5f; font-weight: 700; }
+  .report-content-box h3 { font-size: 1.02rem !important; margin: 0.5em 0 0.3em !important; color: #1e3a5f; font-weight: 700; }
+  .report-content-box h4 { font-size: 0.98rem !important; margin: 0.45em 0 0.1em !important; color: #1e3a5f; font-weight: 700; }
+  .report-content-box h5 { font-size: 0.96rem !important; margin: 0.4em 0 0.1em !important; color: #1e3a5f; font-weight: 700; }
+  .report-content-box h5 strong { font-weight: 700 !important; }
+  .report-content-box h4 + ul { margin-top: 0.1rem !important; }
+  .report-content-box h4 + p { margin: 0.12em 0 !important; }
+  .report-content-box h4 + p + p { margin: 0.12em 0 !important; }
+  .report-content-box p { margin: 0.5em 0 !important; line-height: 1.75 !important; }
   .report-content-box ul {
     list-style-type: circle;
     list-style-position: outside;
     padding-left: 1.35rem;
-    margin: 0.4rem 0 !important;
-    line-height: 1.5 !important;
+    margin: 0.5rem 0 !important;
+    line-height: 1.75 !important;
   }
   .report-content-box ul ul {
     list-style-type: disc;
     list-style-position: outside;
     padding-left: 1.5rem;
-    margin: 0.25rem 0 0.3rem 0 !important;
-    margin-top: 0.2rem !important;
+    margin: 0.35rem 0 0.4rem 0 !important;
+    margin-top: 0.3rem !important;
   }
-  .report-content-box li { margin: 0.25rem 0 !important; padding-left: 0.25rem; word-break: keep-all; overflow-wrap: break-word; line-height: 1.5 !important; }
-  .report-content-box li li { margin: 0.18rem 0 !important; padding-left: 0.2rem; }
+  .report-content-box li { margin: 0.35rem 0 !important; padding-left: 0.25rem; word-break: keep-all; overflow-wrap: break-word; line-height: 1.75 !important; }
+  .report-content-box li li { margin: 0.28rem 0 !important; padding-left: 0.2rem; }
   .report-content-box strong { font-weight: 700; color: #1e3a5f; }
-  .report-content-box hr { border: none; border-top: 1px solid rgba(30, 58, 95, 0.25); margin: 0.5em 0 !important; }
+  .report-content-box ol + p { margin-top: 0.6em !important; }
+  .report-content-box hr { border: none; border-top: 1px solid rgba(30, 58, 95, 0.25); margin: 0.6em 0 !important; }
   .report-content-box ul ul li { page-break-inside: avoid; break-inside: avoid; orphans: 2; widows: 2; }
   .report-content-box table {
     border-collapse: collapse;
     table-layout: fixed;
     width: 100%;
     max-width: 100%;
-    margin: 0.4em 0 !important;
+    margin: 0.5em 0 !important;
     font-size: 0.88rem !important;
-    line-height: 1.45 !important;
+    line-height: 1.6 !important;
     color: #1e3a5f;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
@@ -737,7 +988,7 @@ professors 배열을 순서대로 사용하세요. 각 교수 블록에서 **관
     padding: 4px 8px !important;
     text-align: left;
     color: #1e3a5f;
-    line-height: 1.45 !important;
+    line-height: 1.6 !important;
     word-break: keep-all;
     overflow-wrap: anywhere;
     min-width: 0;
